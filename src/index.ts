@@ -1,89 +1,100 @@
-import { Emitter, EventListenerId } from 'eventti';
+import { Emitter, EventListenerId, EventName } from 'eventti';
 
-export type TickerCallback = (time: number) => void;
+export type Phase = EventName;
 
-export type TickerCallbackId = EventListenerId;
+export type PhaseListener = (time: number) => void;
 
-export class Ticker<TickerLane extends string | symbol> {
-  lanes: TickerLane[];
+export type PhaseListenerId = EventListenerId;
+
+export class Ticker<P extends Phase> {
+  phases: P[];
   autoTick: boolean;
-  protected _rafId: number | null;
-  protected _emitter: Emitter<Record<TickerLane, TickerCallback>>;
-  protected _callbackLists: TickerCallback[][];
+  protected _raf: number | null;
+  protected _queue: PhaseListener[][];
+  protected _emitter: Emitter<Record<P, PhaseListener>>;
 
-  constructor() {
-    this.lanes = [];
-    this.autoTick = true;
+  constructor(options: { phases?: P[]; autoTick?: boolean } = {}) {
+    const { phases = [], autoTick = true } = options;
 
-    this._rafId = null;
+    this.phases = phases;
+    this.autoTick = autoTick;
+
+    this._raf = null;
     this._emitter = new Emitter();
-    this._callbackLists = [];
+    this._queue = [];
 
     this.tick = this.tick.bind(this);
   }
 
-  tick(time: number) {
-    this._rafId = null;
+  tick(time: number): void {
+    this._raf = null;
 
-    const { _callbackLists, lanes } = this;
+    const { _queue, phases } = this;
+
+    if (_queue.length) {
+      throw new Error(`Can't tick before the previous tick has finished.`);
+    }
 
     let i: number;
     let j: number;
     let iCount: number;
     let jCount: number;
-    let callbacks: TickerCallback[];
-    let maybeCallbacks: typeof callbacks | null;
+    let listeners: PhaseListener[];
+    let maybeListeners: typeof listeners | null;
 
-    // Create callback lists.
-    for (i = 0, iCount = lanes.length; i < iCount; i++) {
-      // @ts-ignore
-      maybeCallbacks = this._emitter._getListeners(lanes[i]);
-      if (maybeCallbacks) _callbackLists.push(maybeCallbacks);
+    // Populate queue.
+    for (i = 0, iCount = phases.length; i < iCount; i++) {
+      maybeListeners = this._emitter['_getListeners'](phases[i]);
+      if (maybeListeners) _queue.push(maybeListeners);
     }
 
-    // Process callback lists.
-    for (i = 0, iCount = _callbackLists.length; i < iCount; i++) {
-      callbacks = _callbackLists[i];
-      for (j = 0, jCount = callbacks.length; j < jCount; j++) {
-        callbacks[j](time);
+    // Process queue.
+    for (i = 0, iCount = _queue.length; i < iCount; i++) {
+      listeners = _queue[i];
+      for (j = 0, jCount = listeners.length; j < jCount; j++) {
+        listeners[j](time);
       }
     }
 
-    // Reset callback lists array.
-    _callbackLists.length = 0;
+    // Reset queue.
+    _queue.length = 0;
 
     // If we have listeners let's keep on ticking.
     if (this.autoTick && this._emitter.listenerCount()) {
-      this.requestTick();
+      this.start();
     }
   }
 
-  requestTick() {
-    if (this.autoTick && this._rafId === null) {
-      this._rafId = requestAnimationFrame(this.tick);
+  start(): void {
+    if (this.autoTick && this._raf === null) {
+      this._raf = requestAnimationFrame(this.tick);
     }
   }
 
-  cancelTick() {
-    if (this._rafId !== null) {
-      cancelAnimationFrame(this._rafId);
-      this._rafId = null;
+  stop(): void {
+    if (this._raf !== null) {
+      cancelAnimationFrame(this._raf);
+      this._raf = null;
     }
   }
 
-  on(lane: TickerLane, callback: TickerCallback): TickerCallbackId {
-    const id = this._emitter.on(lane, callback);
-    this.requestTick();
+  on(phase: P, listener: PhaseListener): PhaseListenerId {
+    const id = this._emitter.on(phase, listener);
+    this.start();
     return id;
   }
 
-  once(lane: TickerLane, callback: TickerCallback): TickerCallbackId {
-    const id = this._emitter.once(lane, callback);
-    this.requestTick();
+  once(phase: P, listener: PhaseListener): PhaseListenerId {
+    const id = this._emitter.once(phase, listener);
+    this.start();
     return id;
   }
 
-  off(lane?: TickerLane, callback?: TickerCallback | TickerCallbackId) {
-    return this._emitter.off(lane, callback);
+  off(phase?: P, listener?: PhaseListener | PhaseListenerId): void {
+    return this._emitter.off(phase, listener);
+  }
+
+  listenerCount(phase?: P): number | void {
+    return this._emitter.listenerCount(phase);
   }
 }

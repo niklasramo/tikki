@@ -1,17 +1,22 @@
-import { Emitter, EventListenerId } from 'eventti';
-export declare type TickerCallback = (time: number) => void;
-export declare type TickerCallbackId = EventListenerId;
-export declare class Ticker<TickerLane extends string | symbol> {
-    lanes: TickerLane[];
+import { Emitter, EventListenerId, EventName } from 'eventti';
+export declare type Phase = EventName;
+export declare type PhaseListener = (time: number) => void;
+export declare type PhaseListenerId = EventListenerId;
+export declare class Ticker<P extends Phase> {
+    phases: P[];
     autoTick: boolean;
-    protected _rafId: number | null;
-    protected _emitter: Emitter<Record<TickerLane, TickerCallback>>;
-    protected _callbackLists: TickerCallback[][];
-    constructor();
+    protected _raf: number | null;
+    protected _queue: PhaseListener[][];
+    protected _emitter: Emitter<Record<P, PhaseListener>>;
+    constructor(options?: {
+        phases?: P[];
+        autoTick?: boolean;
+    });
     tick(time: number): void;
-    requestTick(): void;
-    cancelTick(): void;
-    on(lane: TickerLane, callback: TickerCallback): TickerCallbackId;
-    once(lane: TickerLane, callback: TickerCallback): TickerCallbackId;
-    off(lane?: TickerLane, callback?: TickerCallback | TickerCallbackId): void;
+    start(): void;
+    stop(): void;
+    on(phase: P, listener: PhaseListener): PhaseListenerId;
+    once(phase: P, listener: PhaseListener): PhaseListenerId;
+    off(phase?: P, listener?: PhaseListener | PhaseListenerId): void;
+    listenerCount(phase?: P): number | void;
 }
