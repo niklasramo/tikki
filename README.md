@@ -116,7 +116,7 @@ A listener id, which can be used to remove this specific listener.
 
 **Examples**
 
-```javascript
+```typescript
 import { Ticker } from 'tikki';
 
 const ticker = new Ticker({ phases: ['test'] });
