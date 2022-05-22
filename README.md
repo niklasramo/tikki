@@ -30,8 +30,6 @@ You can access Tikki via `window.tikki` global variable in browser context.
 
 <h2><a id="usage" href="#usage" aria-hidden="true">#</a> Usage</h2>
 
-Basic usage.
-
 ```typescript
 import { Ticker } from 'tikki';
 
@@ -69,12 +67,26 @@ ticker.stop();
 ```typescript
 import { Ticker } from 'tikki';
 
-const ticker = new Ticker({
-  // Defaults to an empty array if omitted.
-  phases: ['read', 'write'],
-  // Defaults to true if omitted.
-  autoTick: true,
-});
+// Define all the allowed phases.
+type AllowedPhases = 'read' | 'write' | 'foo' | 'bar';
+
+// Instantiate ticker.
+const ticker = new Ticker<AllowedPhases>(
+  // Optionally, you can provide initial settings.
+  {
+    // Defaults to an empty array if omitted in which case nothing gets emitted
+    // on tick. You should probably always define the phases unless you
+    // you intentionally want to skip emitting anything.
+    phases: ['read', 'write'],
+    // Defaults to true if omitted. If this is set to false then you have to
+    // manually call the tick method within your custom loop.
+    autoTick: true,
+  }
+);
+
+// You can change the initial settings any time you want after instantiation.
+ticker.phases = ['foo', 'read', 'write', 'bar'];
+ticker.autoTick = false;
 ```
 
 **Methods**
@@ -89,19 +101,153 @@ const ticker = new Ticker({
 
 <h3><a id="ticker-on" href="#ticker-on" aria-hidden="true">#</a> <code>ticker.on( phase, listener )</code></h3>
 
-Identical to Eventti's [emitter.on( phase, listener )](https://github.com/niklasramo/eventti#emitter-on), which is used internally in Ticker. Adding a new listener will automatically start the ticker.
+Add a listener to a phase. You can add the same listener multiple times.
+
+**Arguments**
+
+- **phase** &nbsp;&mdash;&nbsp; _String / Number / Symbol_
+  - The phase specified as a string, number or symbol.
+- **listener** &nbsp;&mdash;&nbsp; _Function_
+  - A listener function that will be called on tick.
+
+**Returns** &nbsp;&mdash;&nbsp; _Symbol_
+
+A listener id, which can be used to remove this specific listener.
+
+**Examples**
+
+```javascript
+import { Ticker } from 'tikki';
+
+const ticker = new Ticker({ phases: ['test'] });
+
+const a = () => console.log('a');
+const b = () => console.log('b');
+
+const id1 = ticker.on('test', a);
+const id2 = ticker.on('test', b);
+const id3 = ticker.on('test', a);
+const id4 = ticker.on('test', b);
+
+ticker.emit('test');
+// a
+// b
+// a
+// b
+
+ticker.off('test', id2);
+ticker.emit('test');
+// a
+// a
+// b
+
+ticker.off('test', a);
+ticker.emit('test');
+// b
+```
 
 <h3><a id="ticker-once" href="#ticker-once" aria-hidden="true">#</a> <code>ticker.once( phase, listener )</code></h3>
 
-Identical to Eventti's [emitter.once( phase, listener )](https://github.com/niklasramo/eventti#emitter-once), which is used internally in Ticker. Adding a new listener will automatically start the ticker.
+Add a one-off listener to a phase. You can add the same listener multiple times.
+
+**Arguments**
+
+- **phase** &nbsp;&mdash;&nbsp; _String / Number / Symbol_
+  - The phase specified as a string, number or symbol.
+- **listener** &nbsp;&mdash;&nbsp; _Function_
+  - A listener function that will be called on tick.
+
+**Returns** &nbsp;&mdash;&nbsp; _Symbol_
+
+A listener id, which can be used to remove this specific listener.
+
+**Examples**
+
+```typescript
+import { Ticker } from 'tikki';
+
+const ticker = new Ticker({ phases: ['test'] });
+const a = () => console.log('a');
+const b = () => console.log('b');
+
+ticker.on('test', a);
+ticker.once('test', b);
+
+ticker.emit('test');
+// a
+// b
+
+ticker.emit('test');
+// a
+```
 
 <h3><a id="ticker-off" href="#ticker-off" aria-hidden="true">#</a> <code>ticker.off( [phase], [target] )</code></h3>
 
-Identical to Eventti's [emitter.off( [phase], [target] )](https://github.com/niklasramo/eventti#emitter-off), which is used internally in Ticker. Removing the last listener will automatically stop the ticker.
+Remove a phase listener or multiple phase listeners. If no _target_ is provided all listeners for the specified phase will be removed. If no _phase_ is provided all listeners from the ticker will be removed.
+
+**Arguments**
+
+- **phase** &nbsp;&mdash;&nbsp; _String / Number / Symbol_ &nbsp;&mdash;&nbsp; _optional_
+  - The phase specified as a string, number or symbol.
+- **target** &nbsp;&mdash;&nbsp; _Function / Symbol_ &nbsp;&mdash;&nbsp; _optional_
+  - Target removable event listeners by specific function or listener id. If no _target_ is provided all listeners for the specified event will be removed.
+
+**Examples**
+
+```typescript
+import { Ticker } from 'tikki';
+
+const ticker = new Ticker({ phases: ['test'] });
+
+const a = () => console.log('a');
+const b = () => console.log('b');
+
+const id1 = ticker.on('test', a);
+const id2 = ticker.on('test', b);
+const id3 = ticker.on('test', a);
+const id4 = ticker.on('test', b);
+
+// Remove specific listener by id.
+ticker.off('test', id2);
+
+// Remove all instances of a specific listener function.
+ticker.off('test', a);
+
+// Remove all listeners from a phase.
+ticker.off('test');
+
+// Remove all listeners from the ticker.
+ticker.off();
+```
 
 <h3><a id="ticker-listenerCount" href="#ticker-listenerCount" aria-hidden="true">#</a> <code>ticker.listenerCount( [phase] )</code></h3>
 
-Identical to Eventti's [emitter.listenerCount( [phase] )](https://github.com/niklasramo/eventti#emitter-listenerCount), which is used internally in Ticker.
+Returns the listener count for a phase if _phase_ is provided. Otherwise returns the listener count for the whole ticker.
+
+**Arguments**
+
+- **phase** &nbsp;&mdash;&nbsp; _String / Number / Symbol_
+  - The phase specified as a string, number or symbol.
+
+**Examples**
+
+```typescript
+import { Ticker } from 'tikki';
+
+const ticker = new Ticker({ phases: ['a', 'b', 'c'] });
+
+ticker.on('a', () => {});
+ticker.on('b', () => {});
+ticker.on('b', () => {});
+ticker.on('c', () => {});
+ticker.on('c', () => {});
+ticker.on('c', () => {});
+
+ticker.listenerCount('a'); // 1
+ticker.listenerCount('b'); // 2
+ticker.listenerCount('c'); // 3
+ticker.listenerCount(); // 6
+```
 
 <h3><a id="ticker-tick" href="#ticker-tick" aria-hidden="true">#</a> <code>ticker.tick( time )</code></h3>
 
@@ -114,7 +260,7 @@ The tick method, which you can use to manually tick the ticker.
 
 **Examples**
 
-```javascript
+```typescript
 import { Ticker } from 'tikki';
 
 const ticker = new Ticker({
