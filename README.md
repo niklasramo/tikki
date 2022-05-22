@@ -2,7 +2,7 @@
 
 Tikki is a fusion of a minimalistic animation loop and an event emitter. It's meant for situations where you need to control the execution flow of different phases within an animation loop, e.g. if you want to batch DOM reads and writes for better performance or orchestrate different tasks within a game loop.
 
-In practice this means that you can use Tikki like an event emitter (`on(event, listener)` / `once(event, listener)` / `off(event, listener)`) with the exception that there is no `emit` method. Instead, Tikki provides a `tick()` method which emits all the registered events in a batch. You can fully control the execution order of the events at any time.
+In practice this means that you can use Tikki like an event emitter with the exception that there is no `emit` method. Instead, Tikki provides a `tick()` method which emits all the registered events in a batch. You can fully control the execution order of the events at any time.
 
 By default Tikki will automatically _tick_ (using `requestAnimationFrame`) whenever there are event listeners and will also automatically stop ticking when there are none. However, you can also turn off the auto-tick mode and just call `tick()` manually if need be.
 
@@ -190,7 +190,7 @@ Remove a phase listener or multiple phase listeners. If no _target_ is provided 
 - **phase** &nbsp;&mdash;&nbsp; _String / Number / Symbol_ &nbsp;&mdash;&nbsp; _optional_
   - The phase specified as a string, number or symbol.
 - **target** &nbsp;&mdash;&nbsp; _Function / Symbol_ &nbsp;&mdash;&nbsp; _optional_
-  - Target removable event listeners by specific function or listener id. If no _target_ is provided all listeners for the specified event will be removed.
+  - Target removable listeners by specific function or listener id. If no _target_ is provided all listeners for the specified phase will be removed.
 
 **Examples**
 
