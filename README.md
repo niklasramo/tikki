@@ -6,7 +6,8 @@ In practice this means that you can use Tikki like an event emitter with the exc
 
 By default Tikki will automatically _tick_ (using `requestAnimationFrame`) whenever there are event listeners and will also automatically stop ticking when there are none. However, you can also turn off the auto-tick mode and just call `tick()` manually if need be.
 
-- Small footprint (around 500 bytes gzipped).
+- Small footprint (around 700 bytes gzipped).
+- Works in Browser and Node.js.
 - One (tiny) dependency -> [Eventti](https://github.com/niklasramo/eventti).
 - Written in TypeScript.
 - MIT licensed.
@@ -81,10 +82,18 @@ const ticker = new Ticker<AllowedPhases>(
     // Defaults to true if omitted. If this is set to false then you have to
     // manually call the tick method within your custom loop.
     autoTick: true,
+    // You can provide your own requestAnimationFrame function here. Defaults to
+    // requestAnimationFrame in browser and a setTimeout based fallback in
+    // node.js.
+    raf: (callback) => setTimeout(() => callback(Date.now()), 1000 / 60),
+    // You can provide your own cancelAnimationFrame function here. Defaults to
+    // cancelAnimationFrame in browser and a setTimeout based fallback in
+    // node.js.
+    caf: (requestId) => clearTimeout(requestId),
   }
 );
 
-// You can change the initial settings any time you want after instantiation.
+// You can update phases and autoTick options after instantiation.
 ticker.phases = ['foo', 'read', 'write', 'bar'];
 ticker.autoTick = false;
 ```
