@@ -1,7 +1,7 @@
 import test from 'ava';
 import { Ticker } from '../dist/tikki.js';
 
-test(`You can add a phase listener`, async (t) => {
+test(`Add a phase listener.`, async (t) => {
   return new Promise((resolve) => {
     const ticker = new Ticker({ phases: ['a'] });
     let counter = 0;
@@ -15,7 +15,7 @@ test(`You can add a phase listener`, async (t) => {
   });
 });
 
-test(`You can add a once phase listener`, async (t) => {
+test(`Add a once phase listener.`, async (t) => {
   return new Promise((resolve) => {
     const ticker = new Ticker({ phases: ['a'] });
     let counter = 0;
@@ -34,7 +34,7 @@ test(`You can add a once phase listener`, async (t) => {
   });
 });
 
-test(`You can remove a phase listener by id`, async (t) => {
+test(`Remove a phase listener by id.`, async (t) => {
   return new Promise((resolve) => {
     const ticker = new Ticker({ phases: ['a'] });
     let counter = 0;
@@ -43,6 +43,10 @@ test(`You can remove a phase listener by id`, async (t) => {
         ticker.off('a', aId);
       }
     });
+    const aOnceId = ticker.on('a', () => {
+      t.fail();
+    });
+    ticker.off('a', aOnceId);
     setTimeout(() => {
       t.is(counter, 3);
       resolve();
@@ -50,7 +54,7 @@ test(`You can remove a phase listener by id`, async (t) => {
   });
 });
 
-test(`You can remove a phase listener by reference`, async (t) => {
+test(`Remove a phase listener by reference.`, async (t) => {
   return new Promise((resolve) => {
     const ticker = new Ticker({ phases: ['a'] });
     let counter = 0;
@@ -77,7 +81,7 @@ test(`Auto-tick mode is enabled by default.`, async (t) => {
   });
 });
 
-test(`Auto-tick mode can be turned off on instantiation.`, async (t) => {
+test(`Auto-tick mode can be disabled on instantiation.`, async (t) => {
   return new Promise((resolve, reject) => {
     const ticker = new Ticker({ phases: ['a'], autoTick: false });
     ticker.once('a', () => {
@@ -106,7 +110,7 @@ test(`Phase listener has frame timestamp as it's only argument.`, async (t) => {
   });
 });
 
-test('Phases can be changed dynamically after instantiation.', async (t) => {
+test('Change phases dynamically after instantiation.', async (t) => {
   return new Promise((resolve) => {
     const ticker = new Ticker({ phases: ['a', 'b', 'x'] });
     let data = '';
@@ -127,7 +131,7 @@ test('Phases can be changed dynamically after instantiation.', async (t) => {
   });
 });
 
-test('You can execute the same phase multiple times in a single tick.', async (t) => {
+test('Execute the same phase multiple times in a single tick.', async (t) => {
   return new Promise((resolve) => {
     const ticker = new Ticker({ phases: ['a', 'b', 'b', 'a', 'x'] });
     let data = '';
