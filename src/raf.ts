@@ -26,7 +26,10 @@ export function getRafFallbackMethods(frameTime = 1000 / 60): RafMethods {
 
 export function getRafMethods(): RafMethods {
   if (typeof requestAnimationFrame === 'function' && typeof cancelAnimationFrame === 'function') {
-    return { requestAnimationFrame, cancelAnimationFrame };
+    return {
+      requestAnimationFrame: (...args) => requestAnimationFrame(...args),
+      cancelAnimationFrame: (...args) => cancelAnimationFrame(...args),
+    };
   } else {
     return getRafFallbackMethods();
   }
