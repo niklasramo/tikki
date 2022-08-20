@@ -1,13 +1,40 @@
-import { Emitter, EventListenerId, EventName } from 'eventti';
-import { getRafMethods, RequestAnimationFrame, CancelAnimationFrame } from './raf';
+import { Emitter, EventListenerId, EventName, EventListenerIdDedupeMode } from 'eventti';
 
-const { requestAnimationFrame: RAF, cancelAnimationFrame: CAF } = getRafMethods();
+const { r: DEFAULT_REQUEST_TICK, c: DEFAULT_CANCEL_TICK } = (() => {
+  if (typeof requestAnimationFrame === 'function' && typeof cancelAnimationFrame === 'function') {
+    return {
+      r: (callback: FrameRequestCallback) => requestAnimationFrame(callback),
+      c: (handle: number) => cancelAnimationFrame(handle),
+    };
+  } else {
+    const frameTime = 1000 / 60;
+    const now = typeof performance === 'undefined' ? () => Date.now() : () => performance.now();
+    return {
+      r: (callback: FrameRequestCallback) => setTimeout(() => callback(now()), frameTime),
+      c: (requestId: any) => clearTimeout(requestId),
+    };
+  }
+})();
 
-type TickerOptions<P extends Phase> = {
+export enum AutoTickState {
+  OFF = 0,
+  ON = 1,
+  PAUSED = 2,
+}
+
+export type TickId = any;
+
+export type RequestTick = (callback: (time: number) => any) => TickId;
+
+export type CancelTick = (requestId: TickId) => any;
+
+export type TickerOptions<P extends Phase> = {
   phases?: P[];
-  autoTick?: boolean;
-  raf?: RequestAnimationFrame;
-  caf?: CancelAnimationFrame;
+  autoTick?: AutoTickState;
+  allowDuplicateListeners?: boolean;
+  idDedupeMode?: EventListenerIdDedupeMode;
+  requestTick?: RequestTick;
+  cancelTick?: CancelTick;
 };
 
 export type Phase = EventName;
@@ -18,30 +45,61 @@ export type PhaseListenerId = EventListenerId;
 
 export class Ticker<P extends Phase> {
   phases: P[];
-  autoTick: boolean;
-  protected _raf: RequestAnimationFrame;
-  protected _caf: CancelAnimationFrame;
-  protected _rafId: number | null;
+  readonly allowDuplicateListeners: boolean;
+  protected _autoTick: AutoTickState;
+  protected _autoTickId: TickId;
+  protected _requestTick: RequestTick;
+  protected _cancelTick: CancelTick;
   protected _queue: PhaseListener[][];
   protected _emitter: Emitter<Record<P, PhaseListener>>;
 
   constructor(options: TickerOptions<P> = {}) {
-    const { phases = [], autoTick = true, raf = RAF, caf = CAF } = options;
+    const {
+      phases = [],
+      autoTick = AutoTickState.ON,
+      allowDuplicateListeners = true,
+      idDedupeMode = 'replace',
+      requestTick = DEFAULT_REQUEST_TICK,
+      cancelTick = DEFAULT_CANCEL_TICK,
+    } = options;
 
     this.phases = phases;
-    this.autoTick = autoTick;
-    this._raf = raf;
-    this._caf = caf;
-
-    this._rafId = null;
-    this._emitter = new Emitter();
+    this.allowDuplicateListeners = allowDuplicateListeners;
+    this._autoTick = autoTick;
+    this._autoTickId = null;
+    this._requestTick = requestTick;
+    this._cancelTick = cancelTick;
+    this._emitter = new Emitter({ allowDuplicateListeners, idDedupeMode });
     this._queue = [];
 
     this.tick = this.tick.bind(this);
   }
 
+  get autoTick() {
+    return this._autoTick;
+  }
+
+  set autoTick(autoTickState: AutoTickState) {
+    if (autoTickState === AutoTickState.ON) {
+      if (this._emitter.listenerCount()) {
+        this._requestFrame();
+      }
+    } else {
+      this._cancelFrame();
+    }
+    this._autoTick = autoTickState;
+  }
+
+  get idDedupeMode() {
+    return this._emitter.idDedupeMode;
+  }
+
+  set idDedupeMode(idDedupeMode: EventListenerIdDedupeMode) {
+    this._emitter.idDedupeMode = idDedupeMode;
+  }
+
   tick(time: number): void {
-    this._rafId = null;
+    this._autoTickId = null;
 
     const { _queue } = this;
     if (_queue.length) {
@@ -53,7 +111,7 @@ export class Ticker<P extends Phase> {
     // queue the next frame _after_ processing the queue and the raf
     // implementation used setTimeout for example, the frame time would be
     // stretched unnecessarily.
-    this.start();
+    this._requestFrame();
 
     const { phases, _emitter } = this;
     let i: number;
@@ -80,35 +138,22 @@ export class Ticker<P extends Phase> {
     // Reset queue.
     _queue.length = 0;
 
-    // Cancel the next frame and stop ticking (in auto-tick mode) if there are
-    // no listeners left in the ticker.
-    if (this.autoTick && !_emitter.listenerCount()) {
-      this.stop();
+    // Cancel the next frame and stop ticking if there are no listeners left in
+    // the ticker.
+    if (this._autoTickId !== null && !_emitter.listenerCount()) {
+      this._cancelFrame();
     }
   }
 
-  start(): void {
-    if (this.autoTick && this._rafId === null) {
-      this._rafId = this._raf(this.tick);
-    }
-  }
-
-  stop(): void {
-    if (this._rafId !== null) {
-      this._caf(this._rafId);
-      this._rafId = null;
-    }
-  }
-
-  on(phase: P, listener: PhaseListener): PhaseListenerId {
-    const id = this._emitter.on(phase, listener);
-    this.start();
+  on(phase: P, listener: PhaseListener, listenerId?: PhaseListenerId): PhaseListenerId {
+    const id = this._emitter.on(phase, listener, listenerId);
+    this._requestFrame();
     return id;
   }
 
-  once(phase: P, listener: PhaseListener): PhaseListenerId {
-    const id = this._emitter.once(phase, listener);
-    this.start();
+  once(phase: P, listener: PhaseListener, listenerId?: PhaseListenerId): PhaseListenerId {
+    const id = this._emitter.once(phase, listener, listenerId);
+    this._requestFrame();
     return id;
   }
 
@@ -118,5 +163,18 @@ export class Ticker<P extends Phase> {
 
   listenerCount(phase?: P): number | void {
     return this._emitter.listenerCount(phase);
+  }
+
+  protected _requestFrame(): void {
+    if (this._autoTick === AutoTickState.ON && this._autoTickId === null) {
+      this._autoTickId = this._requestTick(this.tick);
+    }
+  }
+
+  protected _cancelFrame(): void {
+    if (this._autoTickId !== null) {
+      this._cancelTick(this._autoTickId);
+      this._autoTickId = null;
+    }
   }
 }

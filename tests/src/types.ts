@@ -2,19 +2,19 @@
 // https://github.com/developit/mitt/blob/main/test/test-types-compilation.ts
 // All credit goes there!
 
-import { Ticker } from '..';
+import { Ticker } from '../../src/index';
 
 const ticker = new Ticker({ phases: ['a', 'b'] });
 
 {
   ticker.on('a', () => {});
-  ticker.on('a', (t: number) => {});
+  ticker.on('a', (_t: number) => {});
 
   ticker.on('b', () => {});
-  ticker.on('b', (t: number) => {});
+  ticker.on('b', (_t: number) => {});
 
   // @ts-expect-error
-  ticker.on('a', (t: string) => {});
+  ticker.on('a', (_t: string) => {});
 
   // @ts-expect-error
   ticker.on('c', () => {});
@@ -22,13 +22,13 @@ const ticker = new Ticker({ phases: ['a', 'b'] });
 
 {
   ticker.once('a', () => {});
-  ticker.once('a', (t: number) => {});
+  ticker.once('a', (_t: number) => {});
 
   ticker.once('b', () => {});
-  ticker.once('b', (t: number) => {});
+  ticker.once('b', (_t: number) => {});
 
   // @ts-expect-error
-  ticker.once('a', (t: string) => {});
+  ticker.once('a', (_t: string) => {});
 
   // @ts-expect-error
   ticker.once('c', () => {});

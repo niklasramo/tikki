@@ -1,13 +1,13 @@
 # Tikki
 
-Tikki is a fusion of a minimalistic animation loop and an event emitter. It's meant for situations where you need to control the execution flow of different phases within an animation loop, e.g. if you want to batch DOM reads and writes for better performance or orchestrate different tasks within a game loop.
+Tikki is a minimalistic game/animation loop implementation, or a "ticker" if you prefer, which you can use to e.g. batch DOM reads/writes for better performance or orchestrate different tasks within a game/animation loop. The little bit of extra juice comes from the fact that there's an event emitter integrated in it, which allows for a very ergonomic (and familiar) API. Nothing too fancy, but still quite powerful in all it's simplicity.
 
-In practice this means that you can use Tikki like an event emitter with the exception that there is no `emit` method. Instead, Tikki provides a `tick()` method which emits all the registered events in a batch. You can fully control the execution order of the events at any time.
+In practice this means that you can use Tikki like an event emitter with the exception that there is no `emit` method. Instead, Tikki provides a `tick` method which emits all the registered events in a batch. You can fully control the execution order of the events at any time.
 
-By default Tikki will automatically _tick_ (using `requestAnimationFrame`) whenever there are event listeners and will also automatically stop ticking when there are none. However, you can also turn off the auto-tick mode and just call `tick()` manually if need be.
+By default Tikki will automatically _tick_ (using preferably `requestAnimationFrame` and falling back to `setTimeout`) whenever there are active event listeners and will also automatically stop ticking when there are none. You can also turn off the auto-tick mode and just call `tick` manually if need be.
 
-- Small footprint (around 700 bytes gzipped).
-- Works in Browser and Node.js.
+- Small footprint (around 800 bytes gzipped).
+- Works in Node.js and browser environments out of the box.
 - One (tiny) dependency -> [Eventti](https://github.com/niklasramo/eventti).
 - Written in TypeScript.
 - MIT licensed.
@@ -16,18 +16,18 @@ By default Tikki will automatically _tick_ (using `requestAnimationFrame`) whene
 
 Node
 
-```
-npm install tikki
+```bash
+$ npm install eventti tikki
 ```
 
 Browser
 
 ```html
-<script src="eventti.umd.js"></script>
-<script src="tikki.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/eventti@3.0.0/dist/eventti.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tikki@2.0.0/dist/tikki.umd.js"></script>
 ```
 
-You can access Tikki via `window.tikki` global variable in browser context.
+Access `Ticker` via `window.tikki.Ticker` in browser context.
 
 <h2><a id="usage" href="#usage" aria-hidden="true">#</a> Usage</h2>
 
@@ -53,10 +53,6 @@ ticker.off('a', refA);
 
 // .once method will add a listener that's called only once on the next tick.
 ticker.once('a', () => console.log('a'));
-
-// You can always manually start and stop ticking, if needed.
-ticker.start();
-ticker.stop();
 ```
 
 <h2><a id="api" href="#api" aria-hidden="true">#</a> API</h2>
@@ -105,8 +101,6 @@ ticker.autoTick = false;
 - [off( [phase], [target] )](#ticker-off)
 - [listenerCount( [phase] )](#ticker-listenerCount)
 - [tick( time )](#ticker-tick)
-- [start()](#ticker-start)
-- [stop()](#ticker-stop)
 
 <h3><a id="ticker-on" href="#ticker-on" aria-hidden="true">#</a> <code>ticker.on( phase, listener )</code></h3>
 
@@ -280,60 +274,6 @@ const ticker = new Ticker({
 // Tick every second.
 setInterval(() => {
   ticker.tick(Date.now());
-}, 1000);
-```
-
-<h3><a id="ticker-start" href="#ticker-start" aria-hidden="true">#</a> <code>ticker.start()</code></h3>
-
-Manually start auto-ticking. Note that this method will have no effect if auto ticking is disabled.
-
-**Examples**
-
-```typescript
-import { Ticker } from 'tikki';
-
-const ticker = new Ticker({ phases: ['a'] });
-
-// Add a listener so ticker starts ticking.
-const refA = ticker.on('a', () => console.log('a'));
-
-// Pause ticker for one second every other second.
-// Why? For example's sake.
-let isPaused = false;
-setInterval(() => {
-  isPaused = !isPaused;
-  if (isPaused) {
-    ticker.stop();
-  } else {
-    ticker.start();
-  }
-}, 1000);
-```
-
-<h3><a id="ticker-stop" href="#ticker-stop" aria-hidden="true">#</a> <code>ticker.stop()</code></h3>
-
-Manually stop auto-ticking. Note that this method will have no effect if auto ticking is disabled.
-
-**Examples**
-
-```typescript
-import { Ticker } from 'tikki';
-
-const ticker = new Ticker({ phases: ['a'] });
-
-// Add a listener so ticker starts ticking.
-const refA = ticker.on('a', () => console.log('a'));
-
-// Pause ticker for one second every other second.
-// Why? For example's sake.
-let isPaused = false;
-setInterval(() => {
-  isPaused = !isPaused;
-  if (isPaused) {
-    ticker.stop();
-  } else {
-    ticker.start();
-  }
 }, 1000);
 ```
 

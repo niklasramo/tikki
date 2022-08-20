@@ -1,40 +1,39 @@
-import test from 'ava';
-import { Ticker } from '../dist/tikki.js';
+import { assert } from 'chai';
+import { Ticker, AutoTickState } from '../../src/index';
 
-test(`Add a phase listener.`, async (t) => {
+it(`Add a phase listener.`, async () => {
   return new Promise((resolve) => {
     const ticker = new Ticker({ phases: ['a'] });
     let counter = 0;
     ticker.on('a', () => {
       if (++counter === 3) {
         ticker.off();
-        t.pass();
+        assert.equal(1, 1);
         resolve();
       }
     });
   });
 });
 
-test(`Add a once phase listener.`, async (t) => {
+it(`Add a once phase listener.`, async () => {
   return new Promise((resolve) => {
     const ticker = new Ticker({ phases: ['a'] });
     let counter = 0;
     ticker.once('a', () => {
       if (++counter > 1) {
         ticker.off();
-        t.fail();
-        resolve();
+        assert.fail();
       }
     });
     setTimeout(() => {
       ticker.off();
-      t.pass();
+      assert.equal(1, 1);
       resolve();
     }, 500);
   });
 });
 
-test(`Remove a phase listener by id.`, async (t) => {
+it(`Remove a phase listener by id.`, async () => {
   return new Promise((resolve) => {
     const ticker = new Ticker({ phases: ['a'] });
     let counter = 0;
@@ -44,17 +43,17 @@ test(`Remove a phase listener by id.`, async (t) => {
       }
     });
     const aOnceId = ticker.on('a', () => {
-      t.fail();
+      assert.fail();
     });
     ticker.off('a', aOnceId);
     setTimeout(() => {
-      t.is(counter, 3);
+      assert.equal(counter, 3);
       resolve();
     }, 500);
   });
 });
 
-test(`Remove a phase listener by reference.`, async (t) => {
+it(`Remove a phase listener by reference.`, async () => {
   return new Promise((resolve) => {
     const ticker = new Ticker({ phases: ['a'] });
     let counter = 0;
@@ -65,52 +64,51 @@ test(`Remove a phase listener by reference.`, async (t) => {
     };
     ticker.on('a', listener);
     setTimeout(() => {
-      t.is(counter, 3);
+      assert.equal(counter, 3);
       resolve();
     }, 500);
   });
 });
 
-test(`Auto-tick mode is enabled by default.`, async (t) => {
+it(`Auto-tick mode is enabled by default.`, async () => {
   return new Promise((resolve) => {
     const ticker = new Ticker({ phases: ['a'] });
     ticker.once('a', () => {
-      t.pass();
+      assert.equal(1, 1);
       resolve();
     });
   });
 });
 
-test(`Auto-tick mode can be disabled on instantiation.`, async (t) => {
-  return new Promise((resolve, reject) => {
-    const ticker = new Ticker({ phases: ['a'], autoTick: false });
+it(`Auto-tick mode can be disabled on instantiation.`, async () => {
+  return new Promise((resolve) => {
+    const ticker = new Ticker({ phases: ['a'], autoTick: AutoTickState.OFF });
     ticker.once('a', () => {
-      t.fail();
-      reject();
+      assert.fail();
     });
     setTimeout(() => {
       ticker.off();
       ticker.once('a', () => {
-        t.pass();
+        assert.equal(1, 1);
         resolve();
       });
-      ticker.tick();
+      ticker.tick(Date.now());
     }, 500);
   });
 });
 
-test(`Phase listener has frame timestamp as it's only argument.`, async (t) => {
+it(`Phase listener has frame timestamp as it's only argument.`, async () => {
   return new Promise((resolve) => {
     const ticker = new Ticker({ phases: ['a'] });
     ticker.once('a', (...args) => {
-      t.is(args.length, 1);
-      t.is(typeof args[0], 'number');
+      assert.equal(args.length, 1);
+      assert.equal(typeof args[0], 'number');
       resolve();
     });
   });
 });
 
-test('Change phases dynamically after instantiation.', async (t) => {
+it('Change phases dynamically after instantiation.', async () => {
   return new Promise((resolve) => {
     const ticker = new Ticker({ phases: ['a', 'b', 'x'] });
     let data = '';
@@ -124,14 +122,14 @@ test('Change phases dynamically after instantiation.', async (t) => {
       ticker.phases = ['b', 'a', 'x'];
       if (data.length >= 4) {
         ticker.off();
-        t.is(data, 'abba');
+        assert.equal(data, 'abba');
         resolve();
       }
     });
   });
 });
 
-test('Execute the same phase multiple times in a single tick.', async (t) => {
+it('Execute the same phase multiple times in a single tick.', async () => {
   return new Promise((resolve) => {
     const ticker = new Ticker({ phases: ['a', 'b', 'b', 'a', 'x'] });
     let data = '';
@@ -143,7 +141,7 @@ test('Execute the same phase multiple times in a single tick.', async (t) => {
     });
     ticker.on('x', () => {
       ticker.off();
-      t.is(data, 'abba');
+      assert.equal(data, 'abba');
       resolve();
     });
   });
