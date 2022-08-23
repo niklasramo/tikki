@@ -1,12 +1,8 @@
 # Tikki
 
-Tikki is a minimalistic game/animation loop implementation, or a "ticker" if you prefer, which you can use to e.g. batch DOM reads/writes for better performance or orchestrate different tasks within a game/animation loop. The little bit of extra juice comes from the fact that there's an event emitter integrated in it, which allows for a very ergonomic (and familiar) API. Nothing too fancy, but still quite powerful in all it's simplicity.
+Tikki is a minimalistic game/animation loop, or a "ticker" if you prefer, with the power of an event emitter baked in it. In practice this means that you can use Tikki like an event emitter with the exception that there is no `emit` method. Instead, Tikki automatically emits the events (or phases as they are called in Tikki's context) in the order you have specified on every animation frame. This allows for a very ergonomic (and familiar) API for controlling the exection order of different tasks/phases.
 
-In practice this means that you can use Tikki like an event emitter with the exception that there is no `emit` method. Instead, Tikki provides a `tick` method which emits all the registered events in a batch. You can fully control the execution order of the events at any time.
-
-By default Tikki will automatically _tick_ (using preferably `requestAnimationFrame` and falling back to `setTimeout`) whenever there are active event listeners and will also automatically stop ticking when there are none. You can also turn off the auto-tick mode and just call `tick` manually if need be.
-
-- Small footprint (around 800 bytes gzipped).
+- Small footprint (around 900 bytes gzipped).
 - Works in Node.js and browser environments out of the box.
 - One (tiny) dependency -> [Eventti](https://github.com/niklasramo/eventti).
 - Written in TypeScript.
@@ -48,10 +44,12 @@ const refC = ticker.on('c', () => console.log('c'));
 // same phase multiple times in the array.
 ticker.phases = ['c', 'b', 'a', 'c'];
 
-// Removing listeners is as simple as this.
+// Removing listeners from a phase is as simple as providing the phase and the
+// listener id (or the actual listener if you wish) to .off method.
 ticker.off('a', refA);
 
-// .once method will add a listener that's called only once on the next tick.
+// .once method will add a listener that's called only once on the next
+// frame and then automatically removed.
 ticker.once('a', () => console.log('a'));
 ```
 
