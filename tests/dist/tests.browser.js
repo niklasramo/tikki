@@ -29,22 +29,11 @@
         });
     }
 
-    function createRequestFrame(xrSession, fallbackFPS = 60) {
-        if (xrSession) {
-            return (callback) => {
-                const handle = xrSession.requestAnimationFrame(callback);
-                return () => {
-                    xrSession.cancelAnimationFrame(handle);
-                };
-            };
-        }
-        else if (typeof requestAnimationFrame === 'function' &&
-            typeof cancelAnimationFrame === 'function') {
+    function createRequestFrame(fallbackFPS = 60) {
+        if (typeof requestAnimationFrame === 'function' && typeof cancelAnimationFrame === 'function') {
             return (callback) => {
                 const handle = requestAnimationFrame(callback);
-                return () => {
-                    cancelAnimationFrame(handle);
-                };
+                return () => cancelAnimationFrame(handle);
             };
         }
         else {
@@ -52,9 +41,7 @@
             const now = typeof performance === 'undefined' ? () => Date.now() : () => performance.now();
             return (callback) => {
                 const handle = setTimeout(() => callback(now()), frameTime);
-                return () => {
-                    clearTimeout(handle);
-                };
+                return () => clearTimeout(handle);
             };
         }
     }
@@ -570,6 +557,44 @@
                     chai.assert.throws(() => ticker.tick(0));
                 });
                 ticker.tick(0);
+            });
+            it(`should pass all the arguments to the listeners`, () => __awaiter(void 0, void 0, void 0, function* () {
+                return new Promise((resolve) => {
+                    const ticker = new Ticker({
+                        phases: ['a', 'b'],
+                        autoTick: AutoTickState.PAUSED,
+                        requestFrame: undefined,
+                    });
+                    ticker.on('a', (time, deltaTime, message, ...args) => {
+                        chai.assert.equal(args.length, 0);
+                        chai.assert.equal(time, 1);
+                        chai.assert.equal(deltaTime, 2);
+                        chai.assert.equal(message, 'test');
+                    });
+                    ticker.on('b', (time, deltaTime, message, ...args) => {
+                        chai.assert.equal(args.length, 0);
+                        chai.assert.equal(time, 1);
+                        chai.assert.equal(deltaTime, 2);
+                        chai.assert.equal(message, 'test');
+                        resolve();
+                    });
+                    ticker.tick(1, 2, 'test');
+                });
+            }));
+            it(`should only emit the listeners of the active phases`, () => {
+                const ticker = new Ticker({
+                    phases: ['a', 'b'],
+                    autoTick: AutoTickState.PAUSED,
+                });
+                let result = '';
+                ticker.on('a', () => (result += 'a'));
+                ticker.on('b', () => (result += 'b'));
+                ticker.on('c', () => (result += 'c'));
+                ticker.tick(0);
+                chai.assert.equal(result, 'ab');
+                ticker.phases = ['c', 'c'];
+                ticker.tick(0);
+                chai.assert.equal(result, 'abcc');
             });
         });
     });

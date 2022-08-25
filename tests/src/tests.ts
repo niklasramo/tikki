@@ -440,7 +440,8 @@ describe('ticker.tick()', () => {
     });
 
     it(`should throw an error if tick is called within a listener`, () => {
-      const ticker = new Ticker({
+      type AllowedPhases = 'test';
+      const ticker = new Ticker<AllowedPhases>({
         phases: ['test'],
         autoTick: AutoTickState.PAUSED,
       });
@@ -448,6 +449,54 @@ describe('ticker.tick()', () => {
         assert.throws(() => ticker.tick(0));
       });
       ticker.tick(0);
+    });
+
+    it(`should pass all the arguments to the listeners`, async () => {
+      return new Promise((resolve) => {
+        type FrameCallback = (time: number, deltaTime: number, message: string) => void;
+        const ticker = new Ticker<'a' | 'b', FrameCallback>({
+          phases: ['a', 'b'],
+          autoTick: AutoTickState.PAUSED,
+          requestFrame: undefined,
+        });
+
+        ticker.on('a', (time, deltaTime, message, ...args) => {
+          assert.equal(args.length, 0);
+          assert.equal(time, 1);
+          assert.equal(deltaTime, 2);
+          assert.equal(message, 'test');
+        });
+
+        ticker.on('b', (time, deltaTime, message, ...args) => {
+          assert.equal(args.length, 0);
+          assert.equal(time, 1);
+          assert.equal(deltaTime, 2);
+          assert.equal(message, 'test');
+          resolve();
+        });
+
+        ticker.tick(1, 2, 'test');
+      });
+    });
+
+    it(`should only emit the listeners of the active phases`, () => {
+      const ticker = new Ticker<'a' | 'b' | 'c'>({
+        phases: ['a', 'b'],
+        autoTick: AutoTickState.PAUSED,
+      });
+
+      let result = '';
+
+      ticker.on('a', () => (result += 'a'));
+      ticker.on('b', () => (result += 'b'));
+      ticker.on('c', () => (result += 'c'));
+
+      ticker.tick(0);
+      assert.equal(result, 'ab');
+
+      ticker.phases = ['c', 'c'];
+      ticker.tick(0);
+      assert.equal(result, 'abcc');
     });
   });
 });
