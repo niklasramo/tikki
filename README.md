@@ -1,6 +1,6 @@
 # Tikki
 
-Tikki is a minimalistic game/animation loop, or a "ticker" if you prefer, with the power of an event emitter baked in it. In practice this means that you can use Tikki like an event emitter with the exception that there is no `emit` method. Instead, Tikki automatically emits the events (or phases as they are called in Tikki's context) in the order you have specified on every animation frame. This allows for a very ergonomic (and familiar) API for controlling the exection order of different tasks/phases.
+Tikki is a minimalistic game/animation loop, or a "ticker" if you prefer, with the power of an event emitter baked in it. In practice this means that you can use Tikki like an event emitter with the exception that there is no `emit` method. Instead, Tikki automatically emits the events (or phases as they are called in Tikki's context) in the order you have specified on every animation frame. This allows for a very ergonomic (and familiar) API for controlling the execution order of different tasks/phases.
 
 - Small footprint (around 900 bytes gzipped).
 - Works in Node.js and browser environments out of the box.
@@ -43,13 +43,13 @@ type AllowedPhases = 'a' | 'b' | 'c' | 'd';
 const ticker = new Ticker<AllowedPhases>({ phases: ['a', 'b', 'c'] });
 
 // Let's create some listeners for testing. Note that by default we are always
-// guranteed to receive the current timestamp as the first argument. You can
+// guranteed to receive the frame's time as the first argument. You can
 // provide your own requestFrame method via the ticker options and configure
 // more arguments to be provided to the listeners, but let's focus on that
 // later on.
-const listenerA: PhaseListener = (timestamp) => console.log('a', timestamp);
-const listenerB: PhaseListener = (timestamp) => console.log('b', timestamp);
-const listenerC: PhaseListener = (timestamp) => console.log('c', timestamp);
+const listenerA: PhaseListener = (time) => console.log('a', time);
+const listenerB: PhaseListener = (time) => console.log('b', time);
+const listenerC: PhaseListener = (time) => console.log('c', time);
 
 // Let's add some listeners to the ticker. At this point the ticker will start
 // ticking automatically and will keep on ticking as long as there are listeners
@@ -100,7 +100,7 @@ const ticker = new Ticker({ phases: ['test'], autoTick: AutoTickState.PAUSED });
 ticker.on('test', () => console.log('test'));
 
 // We can now manually tick if need be. Note that the tick method always
-// requires the current timestamp in milliseconds as the first argument, it will
+// requires the current time in milliseconds as the first argument, it will
 // be propagated to the phase listeners.
 ticker.tick(Date.now());
 
@@ -130,7 +130,7 @@ const createCustomRequestFrame = () => {
   let _prevTime = 0;
 
   // The frame request method should accept a single argument - a callback which
-  // receives the timestamp as the first argument and optionally any amount
+  // receives the frame time as the first argument and optionally any amount
   // of arguments after that.
   return (callback: CustomFrameCallback) => {
     const handle = setTimeout(() => {
@@ -421,17 +421,13 @@ Manually ticks the ticker. This is mainly meant for situations where you do not 
 ```typescript
 import { Ticker, AutoTickState } from 'tikki';
 
-type AllowedPhases = 'a' | 'b';
-
 type FrameCallback = (time: number, deltaTime: number) => void;
 
-const ticker = new Ticker<AllowedPhases, FrameCallback>({
+const ticker = new Ticker<'a', FrameCallback>({
+  phases: ['a',]
   // Disable default auto-ticking.
   autoTick: AutoTickState.PAUSED,
   // We are ticking manually so no requestFrame is needed.
-  // A good thing to note here is that the FrameCallback
-  // type is inferred from this method unless the type is
-  // explicitly provided to the constructor.
   requestFrame: undefined,
 });
 
