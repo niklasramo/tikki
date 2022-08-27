@@ -4,17 +4,21 @@ import { createRequestFrame } from './createRequestFrame';
 
 type Writeable<T> = { -readonly [P in keyof T]: T[P] };
 
-type DefaultFrameCallback = (time: number) => void;
-
-type CancelFrame = () => void;
-
 export type FrameCallback = (time: number, ...args: any) => void;
+
+export type DefaultFrameCallback = (time: number) => void;
 
 export type RequestFrame<FC extends FrameCallback = DefaultFrameCallback> = (
   callback: FC
 ) => CancelFrame;
 
-export type Phase = EventName;
+export type CancelFrame = () => void;
+
+export type Phase<T extends Ticker<EventName>> = Parameters<T['on']>[0];
+
+export type PhaseListener<
+  T extends Ticker<EventName, FrameCallback> = Ticker<EventName, DefaultFrameCallback>
+> = Parameters<T['on']>[1];
 
 export type PhaseListenerId = EventListenerId;
 
@@ -24,7 +28,7 @@ export enum AutoTickState {
   CONTINUOUS = 3,
 }
 
-export class Ticker<P extends Phase, FC extends FrameCallback = DefaultFrameCallback> {
+export class Ticker<P extends EventName, FC extends FrameCallback = DefaultFrameCallback> {
   phases: P[];
   protected _autoTick: AutoTickState;
   protected _requestFrame: RequestFrame<FC> | null;

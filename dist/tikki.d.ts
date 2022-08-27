@@ -1,17 +1,18 @@
 import { EventName, EventListenerId, Emitter, EventListenerIdDedupeMode } from 'eventti';
 
-declare type DefaultFrameCallback = (time: number) => void;
-declare type CancelFrame = () => void;
 declare type FrameCallback = (time: number, ...args: any) => void;
+declare type DefaultFrameCallback = (time: number) => void;
 declare type RequestFrame<FC extends FrameCallback = DefaultFrameCallback> = (callback: FC) => CancelFrame;
-declare type Phase = EventName;
+declare type CancelFrame = () => void;
+declare type Phase<T extends Ticker<EventName>> = Parameters<T['on']>[0];
+declare type PhaseListener<T extends Ticker<EventName, FrameCallback> = Ticker<EventName, DefaultFrameCallback>> = Parameters<T['on']>[1];
 declare type PhaseListenerId = EventListenerId;
 declare enum AutoTickState {
     PAUSED = 1,
     ON_DEMAND = 2,
     CONTINUOUS = 3
 }
-declare class Ticker<P extends Phase, FC extends FrameCallback = DefaultFrameCallback> {
+declare class Ticker<P extends EventName, FC extends FrameCallback = DefaultFrameCallback> {
     phases: P[];
     protected _autoTick: AutoTickState;
     protected _requestFrame: RequestFrame<FC> | null;
@@ -45,6 +46,7 @@ declare class Ticker<P extends Phase, FC extends FrameCallback = DefaultFrameCal
 
 declare function createRequestFrame(fallbackFPS?: number): (callback: FrameRequestCallback) => () => void;
 
-declare function createXrRequestFrame(xrSession: XRSession): (callback: XRFrameRequestCallback) => () => void;
+declare type XrFrameCallback = XRFrameRequestCallback;
+declare function createXrRequestFrame(xrSession: XRSession): (callback: XrFrameCallback) => () => void;
 
-export { AutoTickState, FrameCallback, Phase, PhaseListenerId, RequestFrame, Ticker, createRequestFrame, createXrRequestFrame };
+export { AutoTickState, CancelFrame, DefaultFrameCallback, FrameCallback, Phase, PhaseListener, PhaseListenerId, RequestFrame, Ticker, XrFrameCallback, createRequestFrame, createXrRequestFrame };

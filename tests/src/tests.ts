@@ -1,26 +1,6 @@
 import { assert } from 'chai';
 import { Ticker, AutoTickState } from '../../src/index';
 
-describe('phase', () => {
-  it(`should be allowed to be a string, number or symbol in all methods`, () => {
-    ['', 'foo', 0, 1, -1, Infinity, -Infinity, Symbol()].forEach((eventName) => {
-      const ticker = new Ticker({ phases: [eventName], autoTick: AutoTickState.PAUSED });
-      let counter = 0;
-      ticker.on(eventName, () => {
-        ++counter;
-      });
-      ticker.once(eventName, () => {
-        ++counter;
-      });
-      assert.equal(ticker.listenerCount(eventName), 2);
-      ticker.tick(0);
-      assert.equal(counter, 2);
-      ticker.off(eventName);
-      assert.equal(ticker.listenerCount(eventName), 0);
-    });
-  });
-});
-
 describe('ticker.on()', () => {
   describe('ticker.on(phase, listener)', () => {
     it(`should return a symbol which serves as a unique id and can be used to remove the listener`, () => {
@@ -566,7 +546,7 @@ describe('ticker.autoTick', () => {
       let counter = 0;
       ticker.on('test', () => {
         ++counter;
-        if (counter === 2 || counter === 10) {
+        if (counter === 2 || counter === 5) {
           ticker.autoTick = AutoTickState.PAUSED;
         }
       });
@@ -576,10 +556,30 @@ describe('ticker.autoTick', () => {
         counter = 3;
         ticker.autoTick = AutoTickState.CONTINUOUS;
         setTimeout(() => {
-          assert.equal(counter, 10);
+          assert.equal(counter, 5);
           resolve();
-        }, 500);
-      }, 500);
+        }, 200);
+      }, 200);
+    });
+  });
+});
+
+describe('phase type', () => {
+  it(`should be allowed to be a string, number or symbol in all methods`, () => {
+    ['', 'foo', 0, 1, -1, Infinity, -Infinity, Symbol()].forEach((eventName) => {
+      const ticker = new Ticker({ phases: [eventName], autoTick: AutoTickState.PAUSED });
+      let counter = 0;
+      ticker.on(eventName, () => {
+        ++counter;
+      });
+      ticker.once(eventName, () => {
+        ++counter;
+      });
+      assert.equal(ticker.listenerCount(eventName), 2);
+      ticker.tick(0);
+      assert.equal(counter, 2);
+      ticker.off(eventName);
+      assert.equal(ticker.listenerCount(eventName), 0);
     });
   });
 });

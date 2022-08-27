@@ -30,7 +30,7 @@ module.exports = [
     output: [{ file: pkg.types, format: 'es' }],
     plugins: [dts()],
   },
-  // Build browser test suite.
+  // Build tests.
   {
     input: './tests/src/tests.ts',
     output: [
