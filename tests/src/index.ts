@@ -1,5 +1,85 @@
 import { assert } from 'chai';
-import { Ticker, AutoTickState } from '../../src/index';
+import { Ticker, TickMode } from '../../src/index.js';
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+describe('Ticker', () => {
+  describe('new Ticker()', () => {
+    it(`should create a new ticker instance`, () => {
+      const ticker = new Ticker();
+      assert.instanceOf(ticker, Ticker);
+    });
+  });
+
+  describe('ticker.phases', () => {
+    it(`should define the order of the phases`, () => {
+      const ticker = new Ticker({ phases: ['a', 'b', 'c'], tickMode: TickMode.PAUSED });
+      let result = '';
+
+      // Make sure the phases are stored in the correct order.
+      assert.deepEqual(ticker.phases, ['a', 'b', 'c']);
+
+      // Make sure the phases are processed in the correct order.
+      ticker.on('b', () => void (result += 'b'));
+      ticker.on('a', () => void (result += 'a'));
+      ticker.on('c', () => void (result += 'c'));
+      ticker.tick(0);
+      assert.equal(result, 'abc');
+
+      // Make sure the phases can be changed dynamically.
+      result = '';
+      ticker.phases = ['c', 'b', 'a'];
+      ticker.tick(0);
+      assert.equal(result, 'cba');
+    });
+  });
+
+  describe('ticker.tickMode', () => {
+    describe('PAUSED', () => {
+      it(`should not tick automatically`, async () => {
+        const ticker = new Ticker({ phases: ['a'], tickMode: TickMode.PAUSED });
+
+        // Make sure the tick mode is set correctly.
+        assert.equal(ticker.tickMode, TickMode.PAUSED);
+
+        // Make sure the ticker doesn't tick automatically.
+        ticker.on('a', () => void assert.fail());
+
+        await wait(1000);
+      });
+    });
+
+    describe('CONTINUOUS', () => {
+      it(`should tick continuosly with or without phase listeners`, async () => {
+        const ticker = new Ticker({ phases: ['a'], tickMode: TickMode.CONTINUOUS });
+
+        // Make sure the tick mode is set correctly.
+        assert.equal(ticker.tickMode, TickMode.CONTINUOUS);
+
+        // Make sure the ticker ticks automatically.
+        let counter = 0;
+        ticker.on('a', () => void ++counter);
+        await wait(100);
+        assert.isAtLeast(counter, 2);
+      });
+    });
+
+    describe('new Ticker({ tickMode: TickMode.CONTINUOUS })', () => {
+      it(`should define the continuous tick mode`, async () => {
+        const ticker = new Ticker({ phases: ['a'], tickMode: TickMode.CONTINUOUS });
+
+        // Make sure the tick mode is set correctly.
+        assert.equal(ticker.tickMode, TickMode.CONTINUOUS);
+
+        // Make sure the ticker ticks automatically.
+        let counter = 0;
+        ticker.on('a', () => void ++counter);
+        await wait(100);
+        assert.isAtLeast(counter, 2);
+      });
+    });
+  });
+});
 
 describe('ticker.on()', () => {
   describe('ticker.on(phase, listener)', () => {

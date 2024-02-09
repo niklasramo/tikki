@@ -1,15 +1,13 @@
-import { Emitter, EventListenerId, EventName, EventListenerIdDedupeMode } from 'eventti';
+import { Emitter, EventListenerId, EventName, EmitterDedupe, EmitterOptions } from 'eventti';
 
-import { createRequestFrame } from './createRequestFrame';
-
-type Writeable<T> = { -readonly [P in keyof T]: T[P] };
+import { createRequestFrame } from './createRequestFrame.js';
 
 export type FrameCallback = (time: number, ...args: any) => void;
 
 export type DefaultFrameCallback = (time: number) => void;
 
 export type RequestFrame<FC extends FrameCallback = DefaultFrameCallback> = (
-  callback: FC
+  callback: FC,
 ) => CancelFrame;
 
 export type CancelFrame = () => void;
@@ -17,12 +15,12 @@ export type CancelFrame = () => void;
 export type Phase<T extends Ticker<EventName>> = Parameters<T['on']>[0];
 
 export type PhaseListener<
-  T extends Ticker<EventName, FrameCallback> = Ticker<EventName, DefaultFrameCallback>
+  T extends Ticker<EventName, FrameCallback> = Ticker<EventName, DefaultFrameCallback>,
 > = Parameters<T['on']>[1];
 
 export type PhaseListenerId = EventListenerId;
 
-export enum AutoTickState {
+export enum TickMode {
   PAUSED = 1,
   ON_DEMAND = 2,
   CONTINUOUS = 3,
@@ -30,36 +28,39 @@ export enum AutoTickState {
 
 export class Ticker<P extends EventName, FC extends FrameCallback = DefaultFrameCallback> {
   phases: P[];
-  protected _autoTick: AutoTickState;
+  protected _tickMode: TickMode;
   protected _requestFrame: RequestFrame<FC> | null;
   protected _cancelFrame: CancelFrame | null;
   protected _queue: FC[][];
   protected _emitter: Emitter<Record<P, FC>>;
+  protected _getListeners: Emitter<Record<P, FC>>['_getListeners'];
 
   constructor(
     options: {
       phases?: P[];
-      autoTick?: AutoTickState;
-      allowDuplicateListeners?: boolean;
-      idDedupeMode?: EventListenerIdDedupeMode;
+      tickMode?: TickMode;
       requestFrame?: RequestFrame<FC>;
-    } = {}
+      dedupe?: EmitterOptions['dedupe'];
+      getId?: EmitterOptions['getId'];
+    } = {},
   ) {
     const {
       phases = [],
-      autoTick = AutoTickState.ON_DEMAND,
-      allowDuplicateListeners = true,
-      idDedupeMode = 'replace',
+      tickMode = TickMode.ON_DEMAND,
       requestFrame = createRequestFrame(),
+      dedupe,
+      getId,
     } = options;
 
     this.phases = phases;
-    this._autoTick = autoTick;
+    this._emitter = new Emitter({ getId, dedupe });
+    this._tickMode = tickMode;
     this._requestFrame = requestFrame;
     this._cancelFrame = null;
     this._queue = [];
-    this._emitter = new Emitter({ allowDuplicateListeners, idDedupeMode });
+
     this.tick = this.tick.bind(this);
+    this._getListeners = this._emitter['_getListeners'].bind(this._emitter);
   }
 
   get requestFrame() {
@@ -71,48 +72,44 @@ export class Ticker<P extends EventName, FC extends FrameCallback = DefaultFrame
     this._kickstart();
   }
 
-  get autoTick() {
-    return this._autoTick;
+  get tickMode() {
+    return this._tickMode;
   }
 
-  set autoTick(autoTickState: AutoTickState) {
-    this._autoTick = autoTickState;
+  set tickMode(TickMode: TickMode) {
+    this._tickMode = TickMode;
     this._kickstart();
   }
 
-  get allowDuplicateListeners() {
-    return this._emitter.allowDuplicateListeners;
+  get dedupe() {
+    return this._emitter.dedupe;
   }
 
-  set allowDuplicateListeners(allowDuplicateListeners: boolean) {
-    (this._emitter as Writeable<Emitter<Record<P, FC>>>).allowDuplicateListeners =
-      allowDuplicateListeners;
+  set dedupe(dedupe: EmitterDedupe) {
+    this._emitter.dedupe = dedupe;
   }
 
-  get idDedupeMode() {
-    return this._emitter.idDedupeMode;
+  get getId() {
+    return this._emitter.getId;
   }
 
-  set idDedupeMode(idDedupeMode: EventListenerIdDedupeMode) {
-    this._emitter.idDedupeMode = idDedupeMode;
+  set getId(getId: NonNullable<EmitterOptions['getId']>) {
+    this._emitter.getId = getId;
   }
 
   tick(...args: Parameters<FC>): void {
-    this._cancelFrame = null;
-
+    // Make sure the previous tick has finished before starting a new one. This
+    // will happen if the user calls `tick` manually within a listener.
     const { _queue } = this;
     if (_queue.length) {
       throw new Error(`Ticker: Can't tick before the previous tick has finished!`);
     }
 
-    // Queue next tick always before processing the queue in case the
-    // auto-ticking method is not using requestAnimationFrame. If we would
-    // queue the next frame _after_ processing the queue and the raf
-    // implementation used setTimeout for example, the frame time would be
-    // stretched unnecessarily.
+    // Reset the cancel frame and request the next frame.
+    this._cancelFrame = null;
     this._request();
 
-    const { phases, _emitter } = this;
+    const { phases, _emitter, _getListeners } = this;
     let i: number;
     let j: number;
     let iCount: number;
@@ -122,7 +119,7 @@ export class Ticker<P extends EventName, FC extends FrameCallback = DefaultFrame
 
     // Populate queue.
     for (i = 0, iCount = phases.length; i < iCount; i++) {
-      maybeListeners = _emitter['_getListeners'](phases[i]) as FC[] | null;
+      maybeListeners = _getListeners(phases[i]) as FC[] | null;
       if (maybeListeners) _queue.push(maybeListeners);
     }
 
@@ -139,7 +136,7 @@ export class Ticker<P extends EventName, FC extends FrameCallback = DefaultFrame
 
     // Cancel the next frame and stop ticking if there are no listeners left in
     // the ticker.
-    if (this._autoTick === AutoTickState.ON_DEMAND && !_emitter.listenerCount()) {
+    if (this._tickMode === TickMode.ON_DEMAND && !_emitter.listenerCount()) {
       this._cancel();
     }
   }
@@ -165,7 +162,7 @@ export class Ticker<P extends EventName, FC extends FrameCallback = DefaultFrame
   }
 
   protected _request(): void {
-    if (this._requestFrame && !this._cancelFrame && this._autoTick >= AutoTickState.ON_DEMAND) {
+    if (this._requestFrame && !this._cancelFrame && this._tickMode !== TickMode.PAUSED) {
       this._cancelFrame = this._requestFrame(this.tick as FC);
     }
   }
@@ -178,9 +175,9 @@ export class Ticker<P extends EventName, FC extends FrameCallback = DefaultFrame
   }
 
   protected _kickstart(): void {
-    if (this._autoTick === AutoTickState.ON_DEMAND) {
+    if (this._tickMode === TickMode.ON_DEMAND) {
       if (this._emitter.listenerCount()) this._request();
-    } else if (this._autoTick === AutoTickState.CONTINUOUS) {
+    } else if (this._tickMode === TickMode.CONTINUOUS) {
       this._request();
     } else {
       this._cancel();

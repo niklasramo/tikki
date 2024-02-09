@@ -1,5 +1,5 @@
-export * from './Ticker';
+export * from './Ticker.js';
 
-export * from './createRequestFrame';
+export * from './createRequestFrame.js';
 
-export * from './createXrRequestFrame';
+export * from './createXrRequestFrame.js';
