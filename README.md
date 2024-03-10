@@ -566,7 +566,7 @@ type TickerOptions<P extends Phase, FC extends FrameCallback> = {
   paused?: boolean;
   onDemand?: boolean;
   requestFrame?: RequestFrame<FC>;
-  dedupe?: 'add' | 'update' | 'ignore' | 'throw';
+  dedupe?: TickerDedupe;
   getId?: (frameCallback: FrameCallback) => FrameCallbackId;
 };
 ```
