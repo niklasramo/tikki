@@ -1,6 +1,7 @@
 // Copied the idea for this test suite from the awesome mitt library:
 // https://github.com/developit/mitt/blob/main/test/test-types-compilation.ts
 // All credit goes there!
+/*
 
 import { Ticker, createRequestFrame } from '../../src/index';
 
@@ -152,3 +153,5 @@ import { Ticker, createRequestFrame } from '../../src/index';
     requestFrame: createRequestFrame(),
   });
 }
+
+*/

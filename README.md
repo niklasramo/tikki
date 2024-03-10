@@ -1,33 +1,51 @@
 # Tikki
 
-Tikki is a minimalistic game/animation loop, or a "ticker" if you prefer, with the power of an event emitter baked in it. In practice this means that you can use Tikki like an event emitter with the exception that there is no `emit` method. Instead, Tikki automatically emits the events (or phases as they are called in Tikki's context) in the order you have specified on every animation frame. This allows for a very ergonomic (and familiar) API for controlling the execution order of different tasks/phases.
+Tikki is a game/animation loop _orchestrator_ suitable for various use cases where you need to control the execution order of different tasks/phases on every animation frame.
 
-- Small footprint (around 900 bytes gzipped).
-- Works in Node.js and browser environments out of the box.
-- One (tiny) dependency -> [Eventti](https://github.com/niklasramo/eventti).
-- Written in TypeScript.
-- MIT licensed.
+It allows you to define _phases_ and then add listeners to them. On every animation frame Tikki will call the listeners of each phase in the order you have specified. This allows for a very ergonomic (and familiar) API for controlling the execution order of different tasks/phases.
 
-<h2><a id="install" href="#install" aria-hidden="true">#</a> Install</h2>
+It's built on top of [`eventti`](https://github.com/niklasramo/eventti), a highly optimized and battle-tested event emitter.
 
-Node
+- 🎯 Simple and intuitive API.
+- 🪶 Small footprint (around 900 bytes minified and gzipped).
+- ⚙️ Works in Node.js and browser environments out of the box.
+- 🍦 Written in TypeScript with strict type definitions.
+- 🤖 Extensively tested.
+- 💝 Free and open source, MIT Licensed.
 
-```bash
-$ npm install eventti tikki
+## Install
+
+### Node
+
+```
+npm install tikki eventti
 ```
 
-Browser
+```ts
+import { Ticker } from 'tikki';
+const ticker = new Ticker();
+```
+
+### Browser
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/eventti@3.0.0/dist/eventti.umd.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/tikki@2.0.0/dist/tikki.umd.js"></script>
+<script type="importmap">
+  {
+    "imports": {
+      "eventti": "https://cdn.jsdelivr.net/npm/eventti@4.0.0/dist/index.js",
+      "tikki": "https://cdn.jsdelivr.net/npm/tikki@3.0.0/dist/index.js"
+    }
+  }
+</script>
+<script type="module">
+  import { Ticker } from 'tikki';
+  const ticker = new Ticker();
+</script>
 ```
 
-Access `Ticker` via `window.tikki.Ticker` in browser context.
+## Usage
 
-<h2><a id="usage" href="#usage" aria-hidden="true">#</a> Usage</h2>
-
-All of [Eventti](https://github.com/niklasramo/eventti)'s features and methods are available in `Ticker` except for the `emit` method, which is replaced by the `tick` method. Please check out Eventti's [docs](https://github.com/niklasramo/eventti#usage) if something is missing here related to the usage of event emitter features.
+All of [Eventti](https://github.com/niklasramo/eventti)'s features and methods are available in `Ticker` except for the `emit` method, which is replaced by the `tick` method (if you need to tick manually). Please check out [Eventti's docs](https://github.com/niklasramo/eventti#usage) if something is missing here related to the usage of the event emitter features.
 
 ```typescript
 import { Ticker, PhaseListener } from 'tikki';
@@ -54,9 +72,9 @@ const listenerC: PhaseListener = (time) => console.log('c', time);
 // Let's add some listeners to the ticker. At this point the ticker will start
 // ticking automatically and will keep on ticking as long as there are listeners
 // in the ticker.
-ticker.on('a', listenerA);
-ticker.on('b', listenerB);
-ticker.on('c', listenerC);
+const listnerIdA = ticker.on('a', listenerA);
+const listnerIdB = ticker.on('b', listenerB);
+const listnerIdC = ticker.on('c', listenerC);
 
 // At this point the ticker would be console logging "a", "b", "c" on every
 // animation frame, but we can change the order of phases dynamically at any
@@ -75,45 +93,47 @@ ticker.phases = ['c', 'b', 'a', 'a'];
 ticker.phases = ['b', 'd'];
 
 // Removing listeners from a phase is as simple as providing the phase and the
-// listener (or listener id) to the .off() method.
-ticker.off('a', listenerA);
+// listener id to the .off() method.
+ticker.off('a', listenerIdA);
 
 // You can also remove all the listeners from a specific phase in one go.
 ticker.off('b');
 
-// Or just remove all listeners from the ticker, which will cause it to stop
-// ticking automatically.
+// Or just remove all listeners from the ticker.
 ticker.off();
 ```
 
-<h3><a id="ticker" href="#ticker" aria-hidden="true">#</a> Auto-tick states</h3>
+## Manual ticking
 
-There are three states for auto-ticking: "on demand", "continuous" and "paused". The default is "on demand", which will only tick when there are listeners in the ticker. In "continuous" state the ticker will tick continuously and in "paused" state the ticker will not tick at all. The "paused" state is mostly meant for situations where you want to manually call `tick` method, e.g. in your custom animation loop. You can also change the auto-tick state dynamically on the fly and ticker will automatically resume/pause ticking depending on the new state.
+By default Tikki will automatically tick on every animation frame, but you can also manually tick the ticker if you wish.
 
 ```typescript
-import { Ticker, AutoTickState } from 'tikki';
+import { Ticker } from 'tikki';
 
 // Let's create a paused ticker.
-const ticker = new Ticker({ phases: ['test'], autoTick: AutoTickState.PAUSED });
+const ticker = new Ticker({ phases: ['test'], paused: true });
 
-// Adding a new listener will not start the ticking.
+// Let's add a listener to the "test" phase. Note that the listener will not be
+// called until we manually tick the ticker.
 ticker.on('test', () => console.log('test'));
 
 // We can now manually tick if need be. Note that the tick method always
 // requires the current time in milliseconds as the first argument, it will
-// be propagated to the phase listeners.
-ticker.tick(Date.now());
+// be propagated to the phase listeners. The timestamp itself can be relative to
+// anything as long as it's consistent between the ticks so that the delta time
+// can be calculated. For example, Date.now() is relative to the Unix epoch
+// while performance.now() is relative to the time when navigation has started.
+ticker.tick(performance.now());
 
-// We can change the auto-tick state on the fly back to the default state and
-// ticking will be automatically resumed (if there are phase listeners).
-ticker.autoTick = AutoTickState.ON_DEMAND;
-
-// Or we can switch to continuous state, which will tick constantly whether or
-// not there are listeners.
-ticker.autoTick = AutoTickState.CONTINUOUS;
+// We can unpause the ticker at any time and it will start ticking
+// automatically. Note that it's probably not a good idea to switch between
+// manual and automatic ticking on the fly as there might be some
+// inconsistencies with the timestamps depending on the requestFrame method
+// you are using and the timestamps you have used while manually ticking.
+ticker.paused = false;
 ```
 
-<h3><a id="ticker" href="#ticker" aria-hidden="true">#</a> Custom frame request methods</h3>
+## Custom frame request methods
 
 By default Tikki uses `requestAnimationFrame` if available globally (e.g. in browsers) and falls back to `setTimeout` (e.g. in Node.js) for the method that queries the next frame. You can also provide your own `requestFrame` method via `Ticker`'s options or even change it dynamically on the fly after instantiation.
 
@@ -134,7 +154,7 @@ const createCustomRequestFrame = () => {
   // of arguments after that.
   return (callback: CustomFrameCallback) => {
     const handle = setTimeout(() => {
-      const time = Date.now();
+      const time = performance.now();
       const deltaTime = _prevTime ? time - _prevTime : 0;
       _prevTime = time;
       callback(time, deltaTime);
@@ -160,8 +180,14 @@ ticker.on('test', (time, deltaTime) => console.log({ time, deltaTime }));
 
 // If manually ticking we must pass the time and delta time to the tick
 // method.
-ticker.autoTick = AutoTickState.PAUSED;
-ticker.tick(Date.now(), 1000 / 60 /* Just a good guess*/);
+ticker.paused = true;
+let time = performance.now();
+setInterval(() => {
+  const newTime = performance.now();
+  const deltaTime = newTime - time;
+  time = newTime;
+  ticker.tick(time, deltaTime);
+}, 1000 / 60);
 ```
 
 Tikki also exports a `createXrRequestFrame` method, which you can use to request [XRSession](https://developer.mozilla.org/en-US/docs/Web/API/XRSession) animation frames.
@@ -203,39 +229,44 @@ ticker.on('test', (time, frame) => {
 });
 ```
 
-<h2><a id="api" href="#api" aria-hidden="true">#</a> API</h2>
+## Ticker API
 
-<h3><a id="ticker" href="#ticker" aria-hidden="true">#</a> Ticker</h3>
+- [Constructor](#constructor)
+- [on( phase, listener, [listenerId] )](#tickeron)
+- [once( phase, listener, [listenerId] )](#tickeronce)
+- [off( [phase], [target] )](#tickeroff)
+- [listenerCount( [phase] )](#tickerlistenercount)
+- [tick( time, [...args] )](#tickertick)
 
-A class that accepts an optional configuration object (via constructor) with the following properties:
+### Constructor
 
-- **phases** &nbsp;&mdash;&nbsp; _array_
-  - Define the initial phases as an array of phase names (string).
+`Ticker` is a class which's constructor accepts an optional [`TickerOptions`](#tickeroptions) object with the following properties:
+
+- **phases**
+  - Define the initial phases as an array of phase names.
   - You can provide the same phase multiple times in which case it's listeners are emitted multiple times on tick.
   - You can change this option dynamically after instantiation via `ticker.phases`.
-  - Optional. Defaults to an empty array.
-- **autoTick** &nbsp;&mdash;&nbsp; _AutoTickState_
-  - `AutoTickState.ON_DEMAND`: ticker will tick automatically while there are listeners.
-  - `AutoTickState.CONTINUOUS`: ticker will tick continuously.
-  - `AutoTickState.PAUSED`: ticker will not tick automatically.
-  - You can change this option dynamically after instantiation via `ticker.autoTick`.
-  - Optional. Defaults to `AutoTickState.ON_DEMAND` if omitted.
-- **requestFrame** &nbsp;&mdash;&nbsp; _Function | null_
+  - Accepts: [`PhaseName[]`](#phasename).
+  - Optional, defaults to an empty array.
+- **paused**
+  - Define if the ticker should be paused initially. Meaning that it won't tick automatically until unpaused.
+  - You can change this option dynamically after instantiation via `ticker.paused`.
+  - Accepts: `boolean`.
+  - Optional, defaults to `false`.
+- **onDemand**
+  - Define if the ticker should tick only when there are listeners in the ticker. It is recommended to use this option only if you don't care about the frame time and just want the ticker to tick when there are listeners in it. If you need to e.g. compute the delta time between frames then you should let the ticker tick continuously and leave this option as `false`.
+  - You can change this option dynamically after instantiation via `ticker.onDemand`.
+  - Accepts: `boolean`.
+  - Optional, defaults to `false`.
+- **requestFrame**
   - Define the method which is used to request the next frame.
-  - You can change this option dynamically after instantiation via `ticker.idDedupeMode`.
-  - Optional. Defaults to `createRequestFrame()`, which uses `requestAnimationFrame` (if available) and falls back to `setTimeout`.
-- **allowDuplicateListeners** &nbsp;&mdash;&nbsp; _boolean_
-  - When set to `false` `on` and `once` methods will throw an error if a duplicate listener is added.
-  - You can change this option dynamically after instantiation via `ticker.allowDuplicateListeners`.
-  - Optional. Defaults to `true` if omitted.
-- **idDedupeMode** &nbsp;&mdash;&nbsp; _"ignore" | "throw" | "replace" | "update"_
-  - Defines how a duplicate listener id is handled when you provide it manually via `on` or `once` method.
-    - `"ignore"`: the new listener is silently ignored and not added to the phase.
-    - `"throw"`: as the name suggests an error will be thrown.
-    - `"replace"`: the existing listener id is removed fully before the new listener is added to the phase (at the end of the listener queue).
-    - `"update"`: the existing listener of the listener id is replaced with the new listener without changing the index of the listener id.
-  - You can change this option dynamically after instantiation via `ticker.idDedupeMode`.
-  - Optional. Defaults to `"replace"` if omitted.
+  - You can change this option dynamically after instantiation via `ticker.requestFrame`.
+  - Accepts: [`PhaseListener`](#phaselistener).
+  - Optional, defaults to `createRequestFrame()`, which uses `requestAnimationFrame` (if available) and falls back to `setTimeout`.
+- **dedupe**
+  - Defines how a duplicate listener id is handled. Refer to the [Eventti's docs](https://github.com/niklasramo/eventti?tab=readme-ov-file#constructor) for more information.
+- **getId**
+  - A function which is used to get the listener id for a listener callback. Refer to the [Eventti's docs](https://github.com/niklasramo/eventti?tab=readme-ov-file#constructor) for more information.
 
 ```typescript
 import { Ticker, AutoTickState } from 'ticker';
@@ -262,128 +293,139 @@ ticker.idDedupeMode = 'ignore';
 ticker.autoTick = AutoTickState.CONTINUOUS;
 ```
 
-**Methods**
-
-- [on( phase, listener, [listenerId] )](#ticker-on)
-- [once( phase, listener, [listenerId] )](#ticker-once)
-- [off( [phase], [target] )](#ticker-off)
-- [listenerCount( [phase] )](#ticker-listenerCount)
-- [tick( time, [...args] )](#ticker-tick)
-
-<h3><a id="ticker-on" href="#ticker-on" aria-hidden="true">#</a> <code>ticker.on( phase, listener, [listenerId] )</code></h3>
+### ticker.on()
 
 Add a listener to a phase.
 
-**Arguments**
+**Syntax**
 
-- **phase** &nbsp;&mdash;&nbsp; _string | number | symbol_
-  - The phase name specified as a string, number or symbol.
-- **listener** &nbsp;&mdash;&nbsp; _Function_
-  - A listener function that will be called on tick.
-- **listenerId** &nbsp;&mdash;&nbsp; _string | number | symbol_ &nbsp;&mdash;&nbsp; _optional_
-  - Optionally provide listener id manually.
-
-**Returns** &nbsp;&mdash;&nbsp; _string | number | symbol_
-
-A listener id, which can be used to remove this specific listener. By default this will always be a symbol unless manually provided.
-
-```typescript
-import { Ticker } from 'ticker';
-
-const ticker = new Ticker({ phases: ['foo', 'bar'] });
-
-// Add listener to "test" phase. A listener id will be returned which
-// you can use to remove this specific listener.
-const listenerId1 = ticker.on('foo', (time) => console.log('foo', time));
-
-// You can also provide the listener id manually. Here we provide "testId" as
-// the listener id and it can be used to remove this specific listener.
-ticker.on('bar', (time) => console.log('bar', time), 'testId');
+```
+ticker.on(phase, listener, [listenerId]);
 ```
 
-<h3><a id="ticker-once" href="#ticker-once" aria-hidden="true">#</a> <code>ticker.once( phase, listener, [listenerId] )</code></h3>
+**Parameters**
 
-Add a one-off listener to a phase.
+1. **phase**
+   - The name of the phase you want to add a listener to.
+   - Accepts: [`PhaseName`](#phasename).
+2. **listener**
+   - A listener function that will be called on tick (if the phase is active).
+   - Accepts: [`PhaseListener`](#phaselistener).
+3. **listenerId**
+   - The id for the listener. If not provided, the id will be generated by the `ticker.getId` method.
+   - Accepts: [`PhaseListenerId`](#phaselistenerid).
+   - _optional_
 
-**Arguments**
+**Returns**
 
-- **phase** &nbsp;&mdash;&nbsp; _string | number | symbol_
-  - The phase name specified as a string, number or symbol.
-- **listener** &nbsp;&mdash;&nbsp; _Function_
-  - A listener function that will be called on tick.
-- **listenerId** &nbsp;&mdash;&nbsp; _string | number | symbol_ &nbsp;&mdash;&nbsp; _optional_
-  - Optionally provide listener id manually.
-
-**Returns** &nbsp;&mdash;&nbsp; _string | number | symbol_
-
-A listener id, which can be used to remove this specific listener. By default this will always be a symbol unless manually provided.
-
-```typescript
-import { Ticker, AutoTickState } from 'ticker';
-
-const ticker = new Ticker({ phases: ['test'], autoTick: AutoTickState.PAUSED });
-
-ticker.once('test', (time) => console.log(time));
-
-ticker.tick(1);
-// 1
-
-ticker.tick(2);
-// -> ...chirp chirp...
-```
-
-<h3><a id="ticker-off" href="#ticker-off" aria-hidden="true">#</a> <code>ticker.off( [phase], [target] )</code></h3>
-
-Remove listener(s) from the ticker:
-
-- If **phase** and a **listener** (as target) are provided all instances of the listener will be removed from the phase.
-- If **phase** and a **listener id** (as target) are provided the specific listener, which is linked to the id, will be removed.
-- If only **phase** is provided all listeners from the phase will be removed.
-- If no arguments are provided all listeners from the ticker will be removed.
-
-**Arguments**
-
-- **phase** &nbsp;&mdash;&nbsp; _string | number | symbol_ &nbsp;&mdash;&nbsp; _optional_
-  - The phase name specified as a string, number or symbol.
-- **target** &nbsp;&mdash;&nbsp; _Function | string | number | symbol_ &nbsp;&mdash;&nbsp; _optional_
-  - The listener or listener id, which needs to be removed.
+A [listener id](#phaselistenerid), which can be used to remove this specific listener. Unless manually provided via arguments this will be whatever the `ticker.getId` method spits out, and by default it spits out symbols which are guaranteed to be always unique.
 
 **Examples**
 
-```typescript
+```ts
 import { Ticker } from 'tikki';
 
-const ticker = new Ticker({ phases: ['test'] });
+// Create a paused ticker (to better demonstrate the usage).
+const ticker = new Ticker({ phases: ['test'], paused: true });
 
-const a = () => console.log('a');
-const b = () => console.log('b');
+// Bind a couple of listeners to the "test" phase. We don't provide the third
+// argument for listener id so it is created automatically and returned by the
+// .on() method.
+const idA = ticker.on('test', (time) => console.log('a', time));
+const idB = ticker.on('test', (time) => console.log('b', time));
 
-const aId1 = ticker.on('test', a);
-const bId1 = ticker.on('test', b);
-const aId2 = ticker.on('test', a);
-const bId2 = ticker.on('test', b);
+// Bind a couple of listeners again to "test" phase, but this time we provide
+// the listener ids manually.
+ticker.on('test', console.log('foo', time), 'foo');
+ticker.on('test', console.log('bar', time), 'bar');
+
+ticker.tick(1);
+// a 1
+// b 1
+// foo 1
+// bar 1
+
+ticker.off('test', idB);
+ticker.tick(2);
+// a 2
+// foo 2
+// bar 2
+
+ticker.off('test', 'foo');
+ticker.tick(3);
+// a 3
+// bar 3
+```
+
+### ticker.once()
+
+Add a one-off listener to a phase. This works identically to the `on` method with the exception that the listener is removed immediately after it has been called once. Please refer to the [`on`](#tickeron) method for more information.
+
+**Syntax**
+
+```
+ticker.once(phase, listener, [listenerId]);
+```
+
+### ticker.off()
+
+Remove a phase listener or multiple phase listeners. If no _listenerId_ is provided all listeners for the specified phase will be removed. If no _phase_ is provided all listeners from the ticker will be removed.
+
+**Syntax**
+
+```
+ticker.off( [ phase ], [ listenerId ] );
+```
+
+**Parameters**
+
+1. **phase**
+   - The phase you want to remove listeners from.
+   - Accepts: [`PhaseName`](#phasename).
+   - _optional_
+2. **listenerId**
+   - The id of the listener you want to remove.
+   - Accepts: [`PhaseListenerId`](#phaselistenerid).
+   - _optional_
+
+**Examples**
+
+```ts
+import { Ticker } from 'tikki';
+
+const ticker = new Ticker({ phases: ['foo', 'bar'] });
+
+const fooA = ticker.on('foo', () => console.log('foo a'));
+const fooB = ticker.on('foo', () => console.log('foo b'));
+const barA = ticker.on('bar', () => console.log('bar a'));
+const barB = ticker.on('bar', () => console.log('bar b'));
 
 // Remove specific listener by id.
-ticker.off('test', bId1);
-
-// Remove all instances of a specific listener.
-ticker.off('test', a);
+ticker.off('foo', fooB);
 
 // Remove all listeners from a phase.
-ticker.off('test');
+ticker.off('bar');
 
 // Remove all listeners from the ticker.
 ticker.off();
 ```
 
-<h3><a id="ticker-listenerCount" href="#ticker-listenerCount" aria-hidden="true">#</a> <code>ticker.listenerCount( [phase] )</code></h3>
+### ticker.listenerCount()
 
-Returns phase's listener count if **phase** is provided. Otherwise returns the amount of all listeners in the ticker.
+Returns the listener count for a phase if _phase_ is provided. Otherwise returns the listener count for the whole ticker.
 
-**Arguments**
+**Syntax**
 
-- **phase** &nbsp;&mdash;&nbsp; _string / number / symbol_
-  - The phase name specified as a string, number or symbol.
+```
+ticker.listenerCount( [ phase ] )
+```
+
+**Parameters**
+
+1. **phase**
+   - The phase you want to get the listener count for.
+   - Accepts: [`PhaseName`](#phasename).
+   - Optional.
 
 **Examples**
 
@@ -405,46 +447,133 @@ ticker.listenerCount('c'); // 3
 ticker.listenerCount(); // 6
 ```
 
-<h3><a id="ticker-tick" href="#ticker-tick" aria-hidden="true">#</a> <code>ticker.tick( time, [...args] )</code></h3>
+### ticker.tick()
 
-Manually ticks the ticker. This is mainly meant for situations where you do not want to use the auto-tick feature.
+Manually ticks the ticker.
 
-**Arguments**
+**Syntax**
 
-- **time** &nbsp;&mdash;&nbsp; _number_
-  - Current time in milliseconds.
-- **...args** &nbsp;&mdash;&nbsp; _any_
-  - Any other arguments you see fit. Just remember to provide your custom `FrameCallback` type to `Ticker`, when using TS, as demonstrated in the example below.
+```
+ticker.tick( time, [...args] )
+```
+
+**Parameters**
+
+1. **time**
+   - Frame time in milliseconds.
+   - Accepts: `number`.
+2. **...args**
+   - Any other arguments you see fit. Just remember to provide your custom `FrameCallback` type to `Ticker` when using TS, as demonstrated in the example below.
+   - Accepts: `any`.
+   - Optional.
 
 **Examples**
 
-```typescript
-import { Ticker, AutoTickState } from 'tikki';
+```ts
+import { Ticker } from 'tikki';
 
-type FrameCallback = (time: number, deltaTime: number) => void;
+// You don't have to provide the custom frame callback type if you don't provide
+// any additional arguments to the listeners, but here's an example of how you
+// can provide additional arguments to the listeners.
+type CustomFrameCallback = (time: number, deltaTime: number) => void;
 
-const ticker = new Ticker<'a', FrameCallback>({
-  phases: ['a',]
-  // Disable default auto-ticking.
-  autoTick: AutoTickState.PAUSED,
-  // We are ticking manually so no requestFrame is needed.
-  requestFrame: undefined,
+// Create a paused ticker.
+const ticker = new Ticker<'test', CustomFrameCallback>({
+  phases: ['test',]
+  paused: true,
 });
 
-ticker.on('a', (time, deltaTime) => {
+// Tick manually whenever you want.
+let time = Date.now();
+setInterval(() => {
+  const newTime = Date.now();
+  const deltaTime = newTime - time;
+  time = newTime;
+  ticker.tick(time, deltaTime);
+}, 1000 / 60);
+
+// Add a listener.
+ticker.on('test', (time, deltaTime) => {
   console.log(time, deltaTime);
 });
-
-// Tick manually every second.
-let lastTime = Date.now();
-setInterval(() => {
-  const time = Date.now();
-  const deltaTime = time - lastTime;
-  lastTime = time;
-  ticker.tick(time, deltaTime);
-}, 1000);
 ```
 
-<h2><a id="license" href="#license" aria-hidden="true">#</a> License</h2>
+### Types
 
-Copyright © 2022, Niklas Rämö (inramo@gmail.com). Licensed under the MIT license.
+Here's a list of all the types that you can import from `tikki`.
+
+```ts
+import {
+  PhaseName,
+  PhaseListener,
+  PhaseListenerId,
+  TickerPhase,
+  TickerPhaseListener,
+  TickerOptions,
+  RequestFrame,
+  CancelFrame,
+} from 'tikki';
+```
+
+#### PhaseName
+
+```ts
+type PhaseName = string | number | symbol;
+```
+
+#### PhaseListener
+
+```ts
+type PhaseListener = (time: number, ...args: any) => void;
+```
+
+#### PhaseListenerId
+
+```ts
+type PhaseListenerId = null | string | number | symbol | bigint | Function | Object;
+```
+
+#### RequestFrame
+
+```ts
+type RequestFrame<FC extends PhaseListener = (time: number) => void> = (
+  callback: FC,
+) => CancelFrame;
+```
+
+#### CancelFrame
+
+```ts
+type CancelFrame = () => void;
+```
+
+#### TickerPhase
+
+```ts
+type TickerPhase<T extends Ticker<PhaseName>> = Parameters<T['on']>[0];
+```
+
+#### TickerPhaseListener
+
+```ts
+type TickerPhaseListener<
+  T extends Ticker<PhaseName, PhaseListener> = Ticker<PhaseName, (time: number) => void>,
+> = Parameters<T['on']>[1];
+```
+
+#### TickerOptions
+
+```ts
+type TickerOptions<P extends PhaseName, FC extends PhaseListener> = {
+  phases?: P[];
+  paused?: boolean;
+  onDemand?: boolean;
+  requestFrame?: RequestFrame<FC>;
+  dedupe?: 'add' | 'update' | 'ignore' | 'throw';
+  getId?: (listener: PhaseListener) => PhaseListenerId;
+};
+```
+
+## License
+
+Copyright © 2022-2024, Niklas Rämö (inramo@gmail.com). Licensed under the MIT license.

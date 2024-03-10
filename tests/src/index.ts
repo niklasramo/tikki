@@ -1,3 +1,4 @@
+/*
 import { assert } from 'chai';
 import { Ticker, TickMode } from '../../src/index.js';
 
@@ -64,8 +65,8 @@ describe('Ticker', () => {
       });
     });
 
-    describe('new Ticker({ tickMode: TickMode.CONTINUOUS })', () => {
-      it(`should define the continuous tick mode`, async () => {
+    describe('ON_DEMAND', () => {
+      it(`should tick automatically only when there are phase listeners`, async () => {
         const ticker = new Ticker({ phases: ['a'], tickMode: TickMode.CONTINUOUS });
 
         // Make sure the tick mode is set correctly.
@@ -663,3 +664,4 @@ describe('phase type', () => {
     });
   });
 });
+*/

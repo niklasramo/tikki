@@ -1,36 +1,40 @@
-import { EventName, EventListenerId, Emitter, EmitterOptions, EmitterDedupe } from 'eventti';
+import { EventName, EventListenerId, EmitterOptions, Emitter, EmitterDedupe } from 'eventti';
 
-type FrameCallback = (time: number, ...args: any) => void;
-type DefaultFrameCallback = (time: number) => void;
-type RequestFrame<FC extends FrameCallback = DefaultFrameCallback> = (callback: FC) => CancelFrame;
-type CancelFrame = () => void;
-type Phase<T extends Ticker<EventName>> = Parameters<T['on']>[0];
-type PhaseListener<T extends Ticker<EventName, FrameCallback> = Ticker<EventName, DefaultFrameCallback>> = Parameters<T['on']>[1];
+type PhaseName = EventName;
 type PhaseListenerId = EventListenerId;
-declare enum TickMode {
-    PAUSED = 1,
-    ON_DEMAND = 2,
-    CONTINUOUS = 3
-}
-declare class Ticker<P extends EventName, FC extends FrameCallback = DefaultFrameCallback> {
-    phases: P[];
-    protected _tickMode: TickMode;
-    protected _requestFrame: RequestFrame<FC> | null;
+type PhaseListener = (time: number, ...args: any) => void;
+type DefaultPhaseListener = (time: number) => void;
+type RequestFrame<FC extends PhaseListener = DefaultPhaseListener> = (callback: FC) => CancelFrame;
+type CancelFrame = () => void;
+type TickerPhase<T extends Ticker<PhaseName>> = Parameters<T['on']>[0];
+type TickerPhaseListener<T extends Ticker<PhaseName, PhaseListener> = Ticker<PhaseName, DefaultPhaseListener>> = Parameters<T['on']>[1];
+type TickerOptions<P extends PhaseName, FC extends PhaseListener> = {
+    phases?: P[];
+    paused?: boolean;
+    onDemand?: boolean;
+    requestFrame?: RequestFrame<FC>;
+    dedupe?: EmitterOptions['dedupe'];
+    getId?: EmitterOptions['getId'];
+};
+declare class Ticker<P extends PhaseName, FC extends PhaseListener = DefaultPhaseListener> {
+    protected _phases: P[];
+    protected _paused: boolean;
+    protected _onDemand: boolean;
+    protected _requestFrame: RequestFrame<FC>;
     protected _cancelFrame: CancelFrame | null;
+    protected _empty: boolean;
     protected _queue: FC[][];
     protected _emitter: Emitter<Record<P, FC>>;
-    protected _getListeners: Emitter<Record<P, FC>>['_getListeners'];
-    constructor(options?: {
-        phases?: P[];
-        tickMode?: TickMode;
-        requestFrame?: RequestFrame<FC>;
-        dedupe?: EmitterOptions['dedupe'];
-        getId?: EmitterOptions['getId'];
-    });
-    get requestFrame(): RequestFrame<FC> | null;
-    set requestFrame(requestFrame: RequestFrame<FC> | null);
-    get tickMode(): TickMode;
-    set tickMode(TickMode: TickMode);
+    protected _getListeners: (phase: P) => FC[] | null;
+    constructor(options?: TickerOptions<P, FC>);
+    get phases(): P[];
+    set phases(phases: P[]);
+    get requestFrame(): RequestFrame<FC>;
+    set requestFrame(requestFrame: RequestFrame<FC>);
+    get paused(): boolean;
+    set paused(paused: boolean);
+    get onDemand(): boolean;
+    set onDemand(onDemand: boolean);
     get dedupe(): EmitterDedupe;
     set dedupe(dedupe: EmitterDedupe);
     get getId(): NonNullable<EmitterOptions['getId']>;
@@ -38,11 +42,10 @@ declare class Ticker<P extends EventName, FC extends FrameCallback = DefaultFram
     tick(...args: Parameters<FC>): void;
     on(phase: P, listener: FC, listenerId?: PhaseListenerId): PhaseListenerId;
     once(phase: P, listener: FC, listenerId?: PhaseListenerId): PhaseListenerId;
-    off(phase?: P, listener?: FC | PhaseListenerId): void;
+    off(phase?: P, listenerId?: PhaseListenerId): void;
     listenerCount(phase?: P): number | void;
     protected _request(): void;
     protected _cancel(): void;
-    protected _kickstart(): void;
 }
 
 declare function createRequestFrame(fallbackFPS?: number): (callback: FrameRequestCallback) => () => void;
@@ -50,4 +53,4 @@ declare function createRequestFrame(fallbackFPS?: number): (callback: FrameReque
 type XrFrameCallback = XRFrameRequestCallback;
 declare function createXrRequestFrame(xrSession: XRSession): (callback: XrFrameCallback) => () => void;
 
-export { type CancelFrame, type DefaultFrameCallback, type FrameCallback, type Phase, type PhaseListener, type PhaseListenerId, type RequestFrame, TickMode, Ticker, type XrFrameCallback, createRequestFrame, createXrRequestFrame };
+export { type CancelFrame, type DefaultPhaseListener, type PhaseListener, type PhaseListenerId, type PhaseName, type RequestFrame, Ticker, type TickerOptions, type TickerPhase, type TickerPhaseListener, type XrFrameCallback, createRequestFrame, createXrRequestFrame };
