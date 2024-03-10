@@ -2,36 +2,38 @@ import { Emitter, EventListenerId, EventName, EmitterDedupe, EmitterOptions } fr
 
 import { createRequestFrame } from './createRequestFrame.js';
 
-export type PhaseName = EventName;
+export type Phase = EventName;
 
-export type PhaseListenerId = EventListenerId;
+export type FrameCallbackId = EventListenerId;
 
-export type PhaseListener = (time: number, ...args: any) => void;
+export type FrameCallback = (time: number, ...args: any) => void;
 
-export type DefaultPhaseListener = (time: number) => void;
+export type DefaultFrameCallback = (time: number) => void;
 
-export type RequestFrame<FC extends PhaseListener = DefaultPhaseListener> = (
+export type RequestFrame<FC extends FrameCallback = DefaultFrameCallback> = (
   callback: FC,
 ) => CancelFrame;
 
 export type CancelFrame = () => void;
 
-export type TickerPhase<T extends Ticker<PhaseName>> = Parameters<T['on']>[0];
+export type TickerDedupe = EmitterDedupe;
 
-export type TickerPhaseListener<
-  T extends Ticker<PhaseName, PhaseListener> = Ticker<PhaseName, DefaultPhaseListener>,
+export type TickerPhase<T extends Ticker<Phase>> = Parameters<T['on']>[0];
+
+export type TickerFrameCallback<
+  T extends Ticker<Phase, FrameCallback> = Ticker<Phase, DefaultFrameCallback>,
 > = Parameters<T['on']>[1];
 
-export type TickerOptions<P extends PhaseName, FC extends PhaseListener> = {
+export type TickerOptions<P extends Phase, FC extends FrameCallback> = {
   phases?: P[];
   paused?: boolean;
   onDemand?: boolean;
   requestFrame?: RequestFrame<FC>;
   dedupe?: EmitterOptions['dedupe'];
-  getId?: EmitterOptions['getId'];
+  getId?: (frameCallback: FrameCallback) => FrameCallbackId;
 };
 
-export class Ticker<P extends PhaseName, FC extends PhaseListener = DefaultPhaseListener> {
+export class Ticker<P extends Phase, FC extends FrameCallback = DefaultFrameCallback> {
   protected _phases: P[];
   protected _paused: boolean;
   protected _onDemand: boolean;
@@ -146,15 +148,18 @@ export class Ticker<P extends PhaseName, FC extends PhaseListener = DefaultPhase
 
     // Populate the queue.
     let i = 0;
-    let iCount = phases.length;
+    let phaseCount = phases.length;
     let batch: ReturnType<typeof _getListeners>;
-    for (; i < iCount; i++) {
+    for (; i < phaseCount; i++) {
       batch = _getListeners(phases[i]);
       if (batch) _queue.push(batch);
     }
 
+    // Get the final phase count.
+    phaseCount = _queue.length;
+
     // Return early if there are no listeners to call.
-    if (!_queue.length) {
+    if (!phaseCount) {
       this._empty = true;
       return;
     }
@@ -164,11 +169,11 @@ export class Ticker<P extends PhaseName, FC extends PhaseListener = DefaultPhase
 
     // Process the queue.
     let j: number;
-    let jCount: number;
-    for (i = 0, iCount = _queue.length; i < iCount; i++) {
+    let fcCount: number;
+    for (i = 0; i < phaseCount; i++) {
       batch = _queue[i];
-      for (j = 0, jCount = batch.length; j < jCount; j++) {
-        batch[j](...(args as Parameters<PhaseListener>));
+      for (j = 0, fcCount = batch.length; j < fcCount; j++) {
+        batch[j](...(args as Parameters<FrameCallback>));
       }
     }
 
@@ -176,25 +181,25 @@ export class Ticker<P extends PhaseName, FC extends PhaseListener = DefaultPhase
     _queue.length = 0;
   }
 
-  on(phase: P, listener: FC, listenerId?: PhaseListenerId): PhaseListenerId {
-    const id = this._emitter.on(phase, listener, listenerId);
+  on(phase: P, frameCallback: FC, frameCallbackId?: FrameCallbackId): FrameCallbackId {
+    const id = this._emitter.on(phase, frameCallback, frameCallbackId);
     this._empty = false;
     this._onDemand && this._request();
     return id;
   }
 
-  once(phase: P, listener: FC, listenerId?: PhaseListenerId): PhaseListenerId {
-    const id = this._emitter.once(phase, listener, listenerId);
+  once(phase: P, frameCallback: FC, frameCallbackId?: FrameCallbackId): FrameCallbackId {
+    const id = this._emitter.once(phase, frameCallback, frameCallbackId);
     this._empty = false;
     this._onDemand && this._request();
     return id;
   }
 
-  off(phase?: P, listenerId?: PhaseListenerId): void {
-    return this._emitter.off(phase, listenerId);
+  off(phase?: P, frameCallbackId?: FrameCallbackId): void {
+    return this._emitter.off(phase, frameCallbackId);
   }
 
-  listenerCount(phase?: P): number | void {
+  count(phase?: P): number | void {
     return this._emitter.listenerCount(phase);
   }
 
