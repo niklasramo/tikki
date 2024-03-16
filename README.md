@@ -1,13 +1,9 @@
 # Tikki
 
-Tikki is a game/animation loop _orchestrator_ suitable for various use cases where you need to control the execution order of different tasks/phases on every animation frame.
-
-It allows you to define _phases_ and then add frame callbacks to them. On every animation frame Tikki will call the frame callbacks of each phase in the order you have specified. This allows for a very ergonomic (and familiar) API for controlling the execution order of different tasks/phases.
-
-It's built on top of [`Eventti`](https://github.com/niklasramo/eventti), a highly optimized and battle-tested event emitter.
+Tikki is a game/animation loop _orchestrator_ that allows you to group frame callbacks into _phases_ and dynamically modify their execution order. It's a simple and powerful abstraction that covers many use cases. Tikki is built on top of [`Eventti`](https://github.com/niklasramo/eventti), a highly optimized and battle-tested event emitter.
 
 - 🎯 Simple and intuitive API.
-- 🪶 Small footprint (around 900 bytes minified and gzipped).
+- 🪶 Small footprint (~1kB minified and gzipped).
 - ⚙️ Works in Node.js and browser environments out of the box.
 - 🍦 Written in TypeScript with strict type definitions.
 - 🤖 Extensively tested.
@@ -45,56 +41,71 @@ const ticker = new Ticker();
 
 ## Usage
 
-All of [Eventti](https://github.com/niklasramo/eventti)'s features and methods are available in `Ticker` except for the `emit` method, which is replaced by the `tick` method (if you need to tick manually). Please check out [Eventti's docs](https://github.com/niklasramo/eventti#usage) if something is missing here related to the usage of the event emitter features.
+Tikki comes in two flavors: `Ticker` and `AutoTicker`.
 
-Note that compared to your basic event emitter, the naming conventions have been changed to better suit the specific use cases of Tikki. For example "listeners" are called "frame callbacks" and "events" are called "phases". Functionality-wise they are the same thing though.
+`Ticker` class is basically just a thin wrapper around [Eventti](https://github.com/niklasramo/eventti)'s `Emitter` with a few tweaks to make it more suitable for our specific use case of orchestrating frame callbacks:
 
-```typescript
+- It replaces the concept of events with _phases_ which are a group of frame callbacks that are executed together. The order of phases can be changed dynamically whenever you want, it's just an array of phase names (`ticker.phases`). This can be useful for e.g. separating game/physics/rendering logic into different phases. You can even provide the same phase multiple times in which case it's callbacks are emitted multiple times on tick.
+- It replaces the `emit` method with a `tick` method, which executes all the frame callbacks of all the phases (in the order defined in `ticker.phases`) with the arguments you provide. You can think of it as a "batched emit" method.
+
+`AutoTicker` class extends the `Ticker` class and provides extra features to automatically tick the ticker on every animation frame, so it can be used as a drop-in replacement for your basic animation loop. It defaults to `requestAnimationFrame` and falls back to `setTimeout` in environments where `requestAnimationFrame` is not supported. You can also provide your own `requestFrame` method if you wish.
+
+### Basic usage
+
+```ts
 import { Ticker, FrameCallback } from 'tikki';
 
-// Create a ticker instance and define the initial phases. Note that the order
-// of phases is meaningful as the ticker will emit the phases in the order you
-// specify. To make TypeScript happy we also need to provide all the
-// allowed phases too (in whatever order you wish) which might not be defined
-// via the phases option at this point yet. If you don't provide the
-// allowed types to the constructor they will be inferred from the phases
-// option.
-type AllowedPhases = 'a' | 'b' | 'c' | 'd';
-const ticker = new Ticker<AllowedPhases>({ phases: ['a', 'b', 'c'] });
+// Define allowed phases. If you don't provide these explicitly then the allowed
+// phases are inferred from the phases you provide to the ticker on
+// instantiation. If you don't provide any phases then any string, number or
+// symbol will be allowed as a valid phase.
+type Phases = 'a' | 'b' | 'c';
 
-// Let's create some frame callbacks for testing. Note that by default we are
-// always guranteed to receive the frame's time as the first argument. You can
-// provide your own frame request method via the ticker options and configure
-// more arguments to be provided to the callbacks, but let's focus on that
-// later on.
-const fcA: FrameCallback = (time) => console.log('a', time);
-const fcB: FrameCallback = (time) => console.log('b', time);
-const fcC: FrameCallback = (time) => console.log('c', time);
+// Define the frame callback type. This is optional, but it's recommended to
+// provide a custom type if you want to enforce the frame callback arguments.
+type FrameCallback = (time: number, dt: number) => void;
 
-// Let's add some frame callbacks to the ticker. At this point the ticker will
-// start ticking automatically.
-const idA = ticker.on('a', fcA);
-const idB = ticker.on('b', fcB);
-const idC = ticker.on('c', fcC);
+// Create a ticker instance and define the phases.
+const ticker = new Ticker<Phases, FrameCallback>({ phases: ['a', 'b', 'c'] });
 
-// At this point the ticker would be console logging "a", "b", "c" on every
-// animation frame, but we can change the order of phases dynamically at any
-// time and even declare the same phase multiple times. For example's sake let's
-// make the ticker console log "c", "b", "a", "a" on every animation frame.
-ticker.phases = ['c', 'b', 'a', 'a'];
+// Let's create a game loop that ticks the ticker manually.
+let prevTime = 0;
+let frameId: number | undefined = undefined;
+function gameLoop(time = 0) {
+  frameId = requestAnimationFrame(gameLoop);
+  if (prevTime < time) {
+    const deltaTime = time - prevTime;
+    ticker.tick(time, deltaTime);
+  }
+  prevTime = time;
+  return () => {
+    cancelAnimationFrame(frameId);
+  };
+}
 
-// You can also remove and add active phases dynamically. If you are using
-// TypeScript you just need to make sure all the phases you will be using are
-// defined in the AllowedPhases type when instantiating the ticker. So let's set
-// "b" and "d" (in that order) to phases. What happens here is probably what
-// you'd expect - all callbacks are kept intact and the ticker will keep on
-// ticking as usual, but only the callbacks for "b" and "d" phases will be
-// emitted on every animation frame. So only "b" would be console logged on
-// every animation frame as we have not added any callbacks for "d" yet.
-ticker.phases = ['b', 'd'];
+// Start the game loop.
+let stopGameLoop = gameLoop();
 
-// Removing callbacks from a phase is as simple as providing the phase and the
-// callback id to the .off() method.
+// Stop the game loop when needed.
+// stopGameLoop();
+
+// And resume it again when needed
+// stopGameLoop = gameLoop(prevTime);
+
+// Add some frame callbacks to the phases.
+const idA = ticker.on('a', (time, dt) => console.log('a', time, dt));
+const idB = ticker.on('b', (time, dt) => console.log('b', time, dt));
+const idC = ticker.on('c', (time, dt) => console.log('c', time, dt));
+
+// Add some frame callbacks to the phases that will be called only once.
+ticker.once('a', (time, dt) => console.log('a once', time, dt));
+ticker.once('b', (time, dt) => console.log('b once', time, dt));
+ticker.once('c', (time, dt) => console.log('c once', time, dt));
+
+// Change the phases dynamically.
+ticker.phases = ['c', 'a'];
+
+// Remove a frame callback from a phase by id.
 ticker.off('a', idA);
 
 // You can also remove all the callbacks from a specific phase in one go.
@@ -104,114 +115,118 @@ ticker.off('b');
 ticker.off();
 ```
 
-## Manual ticking
+### Automatic ticking
 
-By default Tikki will automatically tick on every animation frame, but you can also manually tick the ticker if you wish.
+Using `AutoTicker` is the same as using `Ticker`, but it ticks automatically on every animation frame. You can also pause and unpause the ticker at any time.
 
-```typescript
-import { Ticker } from 'tikki';
+```ts
+// Create ticker. It will start ticking automatically right away.
+const ticker = new AutoTicker({ phases: ['a', 'b', 'c'] });
 
-// Let's create a paused ticker.
-const ticker = new Ticker({ phases: ['test'], paused: true });
+// Add some frame callbacks to the phases. By default the AutoTicker provides
+// only the time of the frame to the frame callbacks.
+ticker.on('a', (time) => console.log('a', time));
+ticker.on('b', (time) => console.log('b', time));
+ticker.on('c', (time) => console.log('c', time));
 
-// Let's add a frame callback to the "test" phase. Note that the frame callback
-// will not be called until we manually tick the ticker.
-ticker.on('test', () => console.log('test'));
+// Pause the ticker any time you want.
+ticker.paused = true;
 
-// We can now manually tick if need be. Note that the tick method always
-// requires the current time in milliseconds as the first argument, it will
-// be propagated to the frame callbacks. The timestamp itself can be relative to
-// anything as long as it's consistent between the ticks so that the delta time
-// can be calculated. For example, Date.now() is relative to the Unix epoch
-// while performance.now() is relative to the time when navigation has started.
-ticker.tick(performance.now());
-
-// We can unpause the ticker at any time and it will start ticking
-// automatically. Note that it's probably not a good idea to switch between
-// manual and automatic ticking on the fly as there might be some
-// inconsistencies with the timestamps depending on the requestFrame method
-// you are using and the timestamps you have used while manually ticking.
+// And unpause it again when needed.
 ticker.paused = false;
 ```
 
-## Custom frame request methods
+### On-demand ticking
 
-By default Tikki uses `requestAnimationFrame` if available globally (e.g. in browsers) and falls back to `setTimeout` (e.g. in Node.js) for the method that queries the next frame. You can also provide your own `requestFrame` method via `Ticker`'s options or even change it dynamically on the fly after instantiation.
+`AutoTicker` also supports on-demand ticking, which means that the ticker will tick only when there are frame callbacks in it. This can be useful if you don't care about the frame time and just want the ticker to tick when there are frame callbacks in it.
 
-There's only one rule -> the first argument of the callback that's used for ticking must be a timestamp in milliseconds. Otherwise you are free to provide any other arguments to the callback.
+```ts
+// Create ticker with onDemand option set to true.
+const ticker = new AutoTicker({ phases: ['a', 'b', 'c'], onDemand: true });
+
+// Once you add a frame callback to the ticker it will start ticking
+// automatically, and keeps ticking as long as there are frame callbacks in it.
+ticker.on('a', (time) => console.log('a', time));
+
+// If you remove all the frame callbacks from the ticker it will stop ticking.
+ticker.off();
+
+// And if you add a frame callback again it will start ticking again.
+ticker.on('a', (time) => console.log('a', time));
+```
+
+### Custom frame request
+
+You can provide your own frame request to the ticker. This can be useful if you want to e.g. track the delta time between frames and provide it to the frame callbacks.
 
 ```typescript
-import { Ticker } from 'tikki';
+import { AutoTicker } from 'tikki';
 
-// Let's create a custom frame request that also tracks delta time and provides
-// it to the frame callbacks.
-type CustomFrameCallback = (time: number, deltaTime: number) => void;
-const createCustomRequestFrame = () => {
-  const frameTime = 1000 / 60;
-  let _prevTime = 0;
+// Define the frame callback type.
+type FrameCallback = (time: number, deltaTime: number) => void;
+
+// Create a custom frame request that tracks time and delta time.
+const createRequestFrame = () => {
+  let prevTime = 0;
 
   // The frame request method should accept a single argument - a callback which
-  // receives the frame time as the first argument and optionally any amount
-  // of arguments after that.
-  return (callback: CustomFrameCallback) => {
-    const handle = setTimeout(() => {
-      const time = performance.now();
-      const deltaTime = _prevTime ? time - _prevTime : 0;
-      _prevTime = time;
+  // receives any arguments you see fit. These arguments are then passed to the
+  // frame callbacks.
+  return (callback: FrameCallback) => {
+    const rafId = requestAnimationFrame((time) => {
+      const deltaTime = prevTime < time ? time - prevTime : 0;
+      prevTime = time;
       callback(time, deltaTime);
-    }, frameTime);
+    });
 
     // The frame request method should return a function that cancels the
     // frame request.
     return () => {
-      clearTimeout(handle);
+      cancelAnimationFrame(rafId);
     };
   };
 };
 
-// Let's provide the custom requestFrame method to the ticker on init.
-const ticker = new Ticker<'test', CustomFrameCallback>({
+// Provide the custom requestFrame method to the ticker on init.
+const ticker = new AutoTicker<'test', FrameCallback>({
   phases: ['test'],
-  requestFrame: createCustomRequestFrame(),
+  requestFrame: createRequestFrame(),
 });
 
-// Time and delta time are now passed to the frame callbacks automatically and
-// TypeScript is aware of their types.
-ticker.on('test', (time, deltaTime) => console.log({ time, deltaTime }));
-
-// If manually ticking we must pass the time and delta time to the tick
-// method.
-ticker.paused = true;
-let time = performance.now();
-setInterval(() => {
-  const newTime = performance.now();
-  const deltaTime = newTime - time;
-  time = newTime;
-  ticker.tick(time, deltaTime);
-}, 1000 / 60);
+// Add a frame callback to the ticker.
+ticker.on('test', (time, deltaTime) => {
+  console.log(time, deltaTime);
+});
 ```
 
 Tikki also exports a `createXrRequestFrame` method, which you can use to request [XRSession](https://developer.mozilla.org/en-US/docs/Web/API/XRSession) animation frames.
 
 ```typescript
-import { Ticker, createXrRequestFrame, XrFrameCallback } from 'tikki';
+import { AutoTicker, createXrRequestFrame, XrFrameCallback } from 'tikki';
+
 const xrTicker = await navigator.xr?.requestSession('immersive-vr').then((xrSession) => {
-  return new Ticker<'test', XrFrameCallback>({
+  return new AutoTicker<'test', XrFrameCallback>({
     phases: ['test'],
     requestFrame: createXrRequestFrame(xrSession),
   });
 });
 ```
 
-Sometimes you might need to switch the `requestFrame` method on the fly, e.g. when entering/exiting [XRSession](https://developer.mozilla.org/en-US/docs/Web/API/XRSession). Tikki covers this use case and allows you to change the `requestFrame` method dynamically at any time. We just need to inform `Ticker` of all the possible `requestFrame` type variations.
+Sometimes you might need to switch the `requestFrame` method on the fly, e.g. when entering/exiting [XRSession](https://developer.mozilla.org/en-US/docs/Web/API/XRSession). Tikki covers this use case and allows you to change the `requestFrame` method dynamically at any time. We just need to inform `AutoTicker` of all the possible `requestFrame` type variations.
 
 ```typescript
-import { Ticker, createXrRequestFrame, XrFrameCallback } from 'tikki';
+import { AutoTicker, createXrRequestFrame, XrFrameCallback } from 'tikki';
 
-// This will start the ticker normally, we just provide a custom FrameCallback
-// type that accounts for the frame callback variations.
-type CustomFrameCallback = (time: number, frame?: Parameters<XrFrameCallback>[1]) => void;
-const ticker = new Ticker<'test', CustomFrameCallback>({
+// Define the frame callback types as a union of all the possible frame callback
+// types that the ticker might encounter. Note that due to limits of TypeScript
+// all the variations must have the same number of arguments, but you can use
+// `undefined` to mark optional arguments. Alternatively you can just create a
+// single custom frame callback type that has all the possible arguments and use
+// that.
+type FrameCallback = ((time: number, frame?: undefined) => void) | XrFrameCallback;
+
+// Create ticker.
+const ticker = new AutoTicker<'test', FrameCallback>({
   phases: ['test'],
 });
 
@@ -230,148 +245,116 @@ ticker.on('test', (time, frame) => {
 });
 ```
 
-## Ticker API
+## API
 
-- [Constructor](#constructor)
-- [on( phase, frameCallback, [ frameCallbackId ] )](#tickeron)
-- [once( phase, frameCallback, [ frameCallbackId ] )](#tickeronce)
-- [off( [ phase ], [ frameCallbackId ] )](#tickeroff)
-- [count( [ phase ] )](#tickercount)
-- [tick( time, [ ...args ] )](#tickertick)
+- [Ticker](#ticker)
+  - [phases](#tickerphases)
+  - [dedupe](#tickerdedupe)
+  - [getId](#tickergetid)
+  - [on( phase, frameCallback, [ frameCallbackId ] )](#tickeron)
+  - [once( phase, frameCallback, [ frameCallbackId ] )](#tickeronce)
+  - [off( [ phase ], [ frameCallbackId ] )](#tickeroff)
+  - [count( [ phase ] )](#tickercount)
+  - [tick( [ ...args ] )](#tickertick)
+- [AutoTicker](#autoticker)
+  - [paused](#autotickerpaused)
+  - [onDemand](#autotickerondemand)
+  - [requestFrame](#autotickerrequestframe)
 
-### Constructor
+### Ticker
 
-`Ticker` is a class which's constructor accepts an optional [`TickerOptions`](#tickeroptions) object with the following properties:
+`Ticker` class wraps [`Eventti`](https://github.com/niklasramo/eventti)'s API and replaces the `emit` method with a `tick` method.
 
-- **phases**
-  - Define the initial phases as an array of phase names. You can change this option dynamically after instantiation via `ticker.phases`. Note that you can also provide the same phase multiple times in which case it's callbacks are emitted multiple times on tick.
-  - Accepts: [`Phase[]`](#Phase).
-  - Optional, defaults to an empty array.
-- **paused**
-  - Define if the ticker should be paused initially, in which case it won't tick automatically until unpaused. You can change this option dynamically after instantiation via `ticker.paused`.
-  - Accepts: `boolean`.
-  - Optional, defaults to `false`.
-- **onDemand**
-  - Define if the ticker should tick only when there are frame callbacks in the ticker. It is recommended to use this option only if you don't care about the frame time and just want the ticker to tick when there are frame callbacks in it. If you need to e.g. compute the delta time between frames then you should let the ticker tick continuously and leave this option as `false`. You can change this option dynamically after instantiation via `ticker.onDemand`.
-  - Accepts: `boolean`.
-  - Optional, defaults to `false`.
-- **requestFrame**
-  - Define the method which is used to request the next frame. You can change this option dynamically after instantiation via `ticker.requestFrame`.
-  - Accepts: [`FrameCallback`](#FrameCallback).
-  - Optional, defaults to `createRequestFrame()`, which uses `requestAnimationFrame` (if available) and falls back to `setTimeout`.
-- **dedupe**
-  - Defines how a duplicate frame callback id is handled:
-    - `"add"`: the existing callback (of the id) is removed and the new callback is appended to the phase's callback queue.
-    - `"update"`: the existing callback (of the id) is replaced with the new callback without changing the index of the callback in the phase's callback queue.
-    - `"ignore"`: the new callback is silently ignored and not added to the phase.
-    - `"throw"`: as the name suggests an error will be thrown.
-  - Accepts: [`TickerDedupe`](#tickerdedupe).
-  - Optional, defaults to `"add"` if omitted.
-- **getId**
-  - A function which is used to get the frame callback id. By default Tikki uses `Symbol()` to create unique ids, but you can provide your own function if you want to use something else. Receives the frame callback as the first (and only) argument.
-  - Accepts: `(frameCallback: FrameCallback) => FrameCallbackId`.
-  - Optional, defaults to `() => Symbol()` if omitted.
+The `tick` method loops over the active phases (events) and collects all the frame callbacks (listeners) from them into a queue, and finally processes the queue executing the frame callbacks with the arguments you provide to the `tick` method. You can think of it as a "batched emit" method.
 
-```typescript
-import { Ticker } from 'ticker';
+Accepts a [`TickerOptions`](#tickeroptions) object as it's only argument.
 
-// Define the allowed phases. If you don't provide these then basically
-// any string, number or symbol will be allowed as phase.
-type AllowedPhases = 'a' | 'b' | 'c';
+**Syntax**
 
-// Frame callback type needs to be provided only in the cases where you wish
-// to provide more arguments than time to the frame callbacks. You can just omit
-// this if you don't provide a custom frame request method.
-type FrameCallback = (time: number) => void;
-
-// Create ticker.
-const ticker = new Ticker<AllowedPhases, FrameCallback>({
-  phases: ['a', 'b'],
-  paused: true,
-  dedupe: 'throw',
-});
-
-// Change some option on the fly dynamically.
-ticker.phases = ['c', 'a'];
-ticker.dedupe = 'ignore';
-ticker.paused = false;
-ticker.onDemand = true;
+```
+const ticker = new Ticker( [ options ] );
 ```
 
-### ticker.on()
+**Options**
+
+- **phases**
+  - See [phases](#tickerphases) docs.
+  - Accepts: [`Phase[]`](#phase).
+  - Optional. Defaults to `[]`.
+- **dedupe**
+  - See [dedupe](#tickerdedupe) docs.
+  - Accepts: [`TickerDedupe`](#tickerdedupe).
+  - Optional. Defaults to `"add"`.
+- **getId**
+  - See [getId](#tickergetid) docs.
+  - Accepts: `(frameCallback: FrameCallback) => FrameCallbackId`.
+  - Optional. Defaults to `() => Symbol()`.
+
+#### ticker.phases
+
+Type: [`Phase[]`](#phase).
+
+An array of phase names. You can change this array dynamically at any time to change the order of the phases. If you provide the same phase multiple times then it's callbacks are emitted multiple times on tick.
+
+#### ticker.dedupe
+
+Type: [`TickerDedupe`](#tickerdedupe).
+
+Defines how a duplicate frame callback id is handled:
+
+- `"add"`: the existing callback (of the id) is removed and the new callback is appended to the phase's callback queue.
+- `"update"`: the existing callback (of the id) is replaced with the new callback without changing the index of the callback in the phase's callback queue.
+- `"ignore"`: the new callback is silently ignored and not added to the phase.
+- `"throw"`: as the name suggests an error will be thrown.
+
+#### ticker.getId
+
+Type:
+
+```ts
+(frameCallback: FrameCallback) => FrameCallbackId;
+```
+
+A function which is used to get the frame callback id. By default Tikki uses `Symbol()` to create unique ids, but you can provide your own function if you want to use something else. Receives the frame callback as the first (and only) argument.
+
+#### ticker.on()
 
 Add a frame callback to a phase.
 
 **Syntax**
 
 ```
-ticker.on(phase, frameCallback, [ frameCallbackId ]);
+ticker.on( phase, frameCallback, [ frameCallbackId ] );
 ```
 
 **Parameters**
 
 1. **phase**
    - The name of the phase you want to add the frame callback to.
-   - Accepts: [`Phase`](#Phase).
+   - Accepts: [`Phase`](#phase).
 2. **frameCallback**
    - A frame callback that will be called on tick (if the phase is active).
-   - Accepts: [`FrameCallback`](#FrameCallback).
+   - Accepts: [`FrameCallback`](#framecallback).
 3. **frameCallbackId**
    - The id for the frame callback. If not provided, the id will be generated by the `ticker.getId` method.
-   - Accepts: [`FrameCallbackId`](#FrameCallbackId).
+   - Accepts: [`FrameCallbackId`](#framecallbackid).
    - Optional.
 
 **Returns**
 
-A [frame callback id](#FrameCallbackId), which can be used to remove this specific callback. Unless manually provided via arguments this will be whatever the `ticker.getId` method spits out, and by default it spits out symbols which are guaranteed to be always unique.
+A [frame callback id](#framecallbackid), which can be used to remove this specific callback. Unless manually provided via arguments this will be whatever the `ticker.getId` method spits out, and by default it spits out symbols which are guaranteed to be always unique.
 
-**Examples**
-
-```ts
-import { Ticker } from 'tikki';
-
-// Create a paused ticker (to better demonstrate the usage).
-const ticker = new Ticker({ phases: ['test'], paused: true });
-
-// Bind a couple of callbacks to the "test" phase. We don't provide the
-// callback id so it is created automatically and returned by the method.
-const idA = ticker.on('test', (time) => console.log('a', time));
-const idB = ticker.on('test', (time) => console.log('b', time));
-
-// Bind a couple of callbacks again to "test" phase, but this time we provide
-// the callback ids manually.
-ticker.on('test', console.log('foo', time), 'foo');
-ticker.on('test', console.log('bar', time), 'bar');
-
-ticker.tick(1);
-// a 1
-// b 1
-// foo 1
-// bar 1
-
-ticker.off('test', idB);
-ticker.tick(2);
-// a 2
-// foo 2
-// bar 2
-
-ticker.off('test', 'foo');
-ticker.tick(3);
-// a 3
-// bar 3
-```
-
-### ticker.once()
+#### ticker.once()
 
 Add a one-off frame callback to a phase. This works identically to the `on` method with the exception that the frame callback is removed immediately after it has been called once. Please refer to the [`on`](#tickeron) method for more information.
 
 **Syntax**
 
 ```
-ticker.once(phase, frameCallback, [ frameCallbackId ]);
+ticker.once( phase, frameCallback, [ frameCallbackId ] );
 ```
 
-### ticker.off()
+#### ticker.off()
 
 Remove a frame callback or multiple frame callbacks. If no _frameCallbackId_ is provided all frame callbacks for the specified phase will be removed. If no _phase_ is provided all frame callbacks from the ticker will be removed.
 
@@ -385,36 +368,14 @@ ticker.off( [ phase ], [ frameCallbackId ] );
 
 1. **phase**
    - The phase you want to remove frame callbacks from.
-   - Accepts: [`Phase`](#Phase).
+   - Accepts: [`Phase`](#phase).
    - _optional_
 2. **frameCallbackId**
    - The id of the frame callback you want to remove.
-   - Accepts: [`FrameCallbackId`](#FrameCallbackId).
+   - Accepts: [`FrameCallbackId`](#framecallbackid).
    - _optional_
 
-**Examples**
-
-```ts
-import { Ticker } from 'tikki';
-
-const ticker = new Ticker({ phases: ['foo', 'bar'] });
-
-const fooA = ticker.on('foo', () => console.log('foo a'));
-const fooB = ticker.on('foo', () => console.log('foo b'));
-const barA = ticker.on('bar', () => console.log('bar a'));
-const barB = ticker.on('bar', () => console.log('bar b'));
-
-// Remove specific frame callback by id.
-ticker.off('foo', fooB);
-
-// Remove all frame callbacks from a phase.
-ticker.off('bar');
-
-// Remove all frame callbacks from the ticker.
-ticker.off();
-```
-
-### ticker.count()
+#### ticker.count()
 
 Returns the frame callback count for a phase if _phase_ is provided. Otherwise returns the frame callback count for the whole ticker.
 
@@ -428,79 +389,72 @@ ticker.count( [ phase ] )
 
 1. **phase**
    - The phase you want to get the frame callback count for.
-   - Accepts: [`Phase`](#Phase).
+   - Accepts: [`Phase`](#phase).
    - Optional.
 
-**Examples**
+#### ticker.tick()
 
-```typescript
-import { Ticker } from 'tikki';
-
-const ticker = new Ticker({ phases: ['a', 'b', 'c'] });
-
-ticker.on('a', () => {});
-ticker.on('b', () => {});
-ticker.on('b', () => {});
-ticker.on('c', () => {});
-ticker.on('c', () => {});
-ticker.on('c', () => {});
-
-ticker.count('a'); // 1
-ticker.count('b'); // 2
-ticker.count('c'); // 3
-ticker.count(); // 6
-```
-
-### ticker.tick()
-
-Manually ticks the ticker. The arguments are propagated to the frame callbacks.
+Collects all the frame callbacks (in the currently active phases) into a queue and calls the frame callbacks with the arguments you provide to this method.
 
 **Syntax**
 
 ```
-ticker.tick( time, [...args] )
+ticker.tick( [ ...args ] )
 ```
 
 **Parameters**
 
-1. **time**
-   - Frame time in milliseconds.
-   - Accepts: `number`.
-2. **...args**
-   - Any other arguments you see fit. Just remember to provide your custom `FrameCallback` type to `Ticker` when using TypeScript, as demonstrated in the example below.
+1. **...args**
+   - Any arguments you see fit. Just remember to provide your custom `FrameCallback` type to `Ticker` when using TypeScript, as demonstrated in the example below.
    - Accepts: `any`.
    - Optional.
 
-**Examples**
+### AutoTicker
 
-```ts
-import { Ticker } from 'tikki';
+`AutoTicker` class extends `Ticker` class and (as the name says) ticks automatically so you don't have to manually call the `tick` method in your own loop. It defaults to `requestAnimationFrame` and falls back to `setTimeout` in environments where `requestAnimationFrame` is not supported.
 
-// You don't have to provide the custom frame callback type if you don't provide
-// any additional arguments to the frame callbacks, but here's an example of how
-// you can provide additional arguments.
-type CustomFC = (time: number, deltaTime: number) => void;
+`AutoTicker` has all the same methods and options as `Ticker`, and a few extra options/properties to control the auto-ticking. Please refer to the [Ticker](#ticker)'s API for anything that's not explicitly documented here. We only document the differences and additions here.
 
-// Create a paused ticker.
-const ticker = new Ticker<'test', CustomFC>({
-  phases: ['test',]
-  paused: true,
-});
+Accepts an [`AutoTickerOptions`](#autotickeroptions) object as it's only argument.
 
-// Tick manually whenever you want.
-let time = Date.now();
-setInterval(() => {
-  const newTime = Date.now();
-  const deltaTime = newTime - time;
-  time = newTime;
-  ticker.tick(time, deltaTime);
-}, 1000 / 60);
+**Syntax**
 
-// Add a frame callback.
-ticker.on('test', (time, deltaTime) => {
-  console.log(time, deltaTime);
-});
 ```
+const ticker = new AutoTicker( [ options ] );
+```
+
+**Options**
+
+- **paused**
+  - See [paused](#autotickerpaused) docs.
+  - Accepts: `boolean`.
+  - Optional. Defaults to `false`.
+- **onDemand**
+  - See [onDemand](#autotickerondemand) docs.
+  - Accepts: `boolean`.
+  - Optional. Defaults to `false`.
+- **requestFrame**
+  - See [requestFrame](#autotickerrequestframe) docs.
+  - Accepts: [`FrameCallback`](#framecallback).
+  - Optional. Defaults to `createRequestFrame()`, which uses `requestAnimationFrame` (if available) and falls back to `setTimeout`.
+
+#### autoticker.paused
+
+Type: `boolean`.
+
+Defines if the ticker is paused. If `true` the ticker won't tick automatically until unpaused. You can change this property dynamically at any time to pause/unpause the ticker.
+
+#### autoticker.onDemand
+
+Type: `boolean`.
+
+Defines if the ticker should tick only when there are frame callbacks in the ticker. If `true` the ticker will tick only when there are frame callbacks in it. If `false` the ticker will tick continuously. You can change this property dynamically at any time to switch between on-demand and continuous ticking.
+
+#### autoticker.requestFrame
+
+Type: [`RequestFrame`](#requestframe).
+
+Defines the method which is used to request the next frame. You can change this property dynamically at any time to switch the frame request method.
 
 ### Types
 
@@ -511,10 +465,9 @@ import {
   Phase,
   FrameCallback,
   FrameCallbackId,
-  TickerPhase,
-  TickerFrameCallback,
   TickerDedupe,
   TickerOptions,
+  AutoTickerOptions,
   RequestFrame,
   CancelFrame,
 } from 'tikki';
@@ -538,20 +491,6 @@ type FrameCallback = (time: number, ...args: any) => void;
 type FrameCallbackId = null | string | number | symbol | bigint | Function | Object;
 ```
 
-#### TickerPhase
-
-```ts
-type TickerPhase<T extends Ticker<Phase>> = Parameters<T['on']>[0];
-```
-
-#### TickerFrameCallback
-
-```ts
-type TickerFrameCallback<
-  T extends Ticker<Phase, FrameCallback> = Ticker<Phase, (time: number) => void>,
-> = Parameters<T['on']>[1];
-```
-
 #### TickerDedupe
 
 ```ts
@@ -561,14 +500,21 @@ type TickerDedupe = 'add' | 'update' | 'ignore' | 'throw';
 #### TickerOptions
 
 ```ts
-type TickerOptions<P extends Phase, FC extends FrameCallback> = {
+interface TickerOptions<P extends Phase> {
   phases?: P[];
+  dedupe?: TickerDedupe;
+  getId?: (frameCallback: FrameCallback) => FrameCallbackId;
+}
+```
+
+#### AutoTickerOptions
+
+```ts
+interface AutoTickerOptions<P extends Phase, FC extends FrameCallback> extends TickerOptions<P> {
   paused?: boolean;
   onDemand?: boolean;
   requestFrame?: RequestFrame<FC>;
-  dedupe?: TickerDedupe;
-  getId?: (frameCallback: FrameCallback) => FrameCallbackId;
-};
+}
 ```
 
 #### RequestFrame

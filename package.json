@@ -49,6 +49,9 @@
     "LICENSE.md"
   ],
   "scripts": {
+    "test": "npm run ts-check && npm run test-node && npm run test-browser",
+    "test-browser": "karma start karma.conf.cjs",
+    "test-node": "mocha tests/dist/index.js",
     "test-size": "size-limit",
     "build": "npm run ts-check && npm run format && npm run build-lib && npm run build-tests",
     "build-lib": "rimraf ./dist && tsup --config ./tsup.config.lib.ts",
@@ -58,7 +61,7 @@
     "format-check": "prettier --check --no-error-on-unmatched-pattern \"./**/*\""
   },
   "devDependencies": {
-    "@size-limit/preset-small-lib": "11.0.2",
+    "@size-limit/preset-small-lib": "11.1.0",
     "@types/chai": "4.3.12",
     "@types/mocha": "10.0.6",
     "@types/webxr": "0.5.14",
@@ -73,7 +76,7 @@
     "karma-mocha-reporter": "2.2.5",
     "mocha": "10.3.0",
     "prettier": "3.2.5",
-    "terser": "5.29.1",
+    "terser": "5.29.2",
     "tsup": "8.0.2",
     "typescript": "5.4.2"
   },

@@ -1,5 +1,9 @@
 export * from './Ticker.js';
 
-export * from './createRequestFrame.js';
+export * from './AutoTicker.js';
 
-export * from './createXrRequestFrame.js';
+export * from './Clock.js';
+
+export * from './utils/createRequestFrame.js';
+
+export * from './utils/createXrRequestFrame.js';
