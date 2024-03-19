@@ -107,11 +107,9 @@ export class AutoTicker<
     // Return early if the ticker has no listeners for _active_ phases.
     if (this._empty) return;
 
-    // Fill the queue with listeners.
-    this._fillQueue();
-
-    // Return early if there are no listeners to call.
-    if (!this._queue.length) {
+    // Fill the queue with listeners and return early if there are no listeners
+    // to call.
+    if (!this._fillQueue().length) {
       this._empty = true;
       return;
     }

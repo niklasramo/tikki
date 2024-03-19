@@ -3,7 +3,7 @@
 Tikki is a game/animation loop _orchestrator_ that allows you to group frame callbacks into _phases_ and dynamically modify their execution order. It's a simple and powerful abstraction that covers many use cases. Tikki is built on top of [`Eventti`](https://github.com/niklasramo/eventti), a highly optimized and battle-tested event emitter.
 
 - 🎯 Simple and intuitive API.
-- 🪶 Small footprint (~1kB minified and gzipped).
+- 🪶 Small footprint (~1kB minified and brotlied).
 - ⚙️ Works in Node.js and browser environments out of the box.
 - 🍦 Written in TypeScript with strict type definitions.
 - 🤖 Extensively tested.

@@ -56,7 +56,7 @@ import { Ticker, AutoTicker, createRequestFrame } from '../../src/index.js';
 }
 
 {
-  // By default listeners should accept any arguments.
+  // By default listeners and tick method should accept any arguments.
 
   const ticker = new Ticker({ phases: ['a'] });
 
@@ -266,9 +266,12 @@ import { Ticker, AutoTicker, createRequestFrame } from '../../src/index.js';
 
   type CustomFrameCallback = (time: number, deltaTime: number) => void;
 
-  new AutoTicker<string, CustomFrameCallback>({
+  const ticker = new AutoTicker<string, CustomFrameCallback>({
     phases: ['a'],
     // @ts-expect-error
     requestFrame: createRequestFrame(),
   });
+
+  // @ts-expect-error
+  ticker.requestFrame = createRequestFrame();
 }

@@ -101,36 +101,40 @@ export class Ticker<P extends Phase, FC extends FrameCallback = FrameCallback> {
   }
 
   protected _fillQueue() {
-    const { _queue, _phases, _getListeners } = this;
+    const queue = this._queue;
+    const phases = this._phases;
+    const getListeners = this._getListeners;
+
     let i = 0;
-    let phaseCount = _phases.length;
-    let batch: ReturnType<typeof _getListeners>;
-    for (; i < phaseCount; i++) {
-      batch = _getListeners(_phases[i]);
-      if (batch) _queue.push(batch);
+    let phasesLength = phases.length;
+    let batch: ReturnType<typeof getListeners>;
+
+    for (; i < phasesLength; i++) {
+      batch = getListeners(phases[i]);
+      if (batch) queue.push(batch);
     }
-    return _queue;
+    return queue;
   }
 
   protected _processQueue(...args: Parameters<FC>) {
-    const { _queue } = this;
-    if (_queue.length) {
-      let i = 0;
-      let j = 0;
-      let iLength = _queue.length;
-      let jLength: number;
-      let batch: FC[];
+    const queue = this._queue;
+    const queueLength = queue.length;
+    if (!queueLength) return;
 
-      for (; i < iLength; i++) {
-        batch = _queue[i];
-        j = 0;
-        jLength = batch.length;
-        for (; j < jLength; j++) {
-          batch[j](...(args as Parameters<FrameCallback>));
-        }
+    let i = 0;
+    let j = 0;
+    let batch: FC[];
+    let batchLength: number;
+
+    for (; i < queueLength; i++) {
+      batch = queue[i];
+      j = 0;
+      batchLength = batch.length;
+      for (; j < batchLength; j++) {
+        batch[j](...(args as any));
       }
-
-      _queue.length = 0;
     }
+
+    queue.length = 0;
   }
 }

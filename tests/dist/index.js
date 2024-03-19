@@ -54,35 +54,37 @@ var Ticker = class {
     }
   }
   _fillQueue() {
-    const { _queue, _phases, _getListeners } = this;
+    const queue = this._queue;
+    const phases = this._phases;
+    const getListeners = this._getListeners;
     let i = 0;
-    let phaseCount = _phases.length;
+    let phasesLength = phases.length;
     let batch;
-    for (; i < phaseCount; i++) {
-      batch = _getListeners(_phases[i]);
+    for (; i < phasesLength; i++) {
+      batch = getListeners(phases[i]);
       if (batch)
-        _queue.push(batch);
+        queue.push(batch);
     }
-    return _queue;
+    return queue;
   }
   _processQueue(...args) {
-    const { _queue } = this;
-    if (_queue.length) {
-      let i = 0;
-      let j = 0;
-      let iLength = _queue.length;
-      let jLength;
-      let batch;
-      for (; i < iLength; i++) {
-        batch = _queue[i];
-        j = 0;
-        jLength = batch.length;
-        for (; j < jLength; j++) {
-          batch[j](...args);
-        }
+    const queue = this._queue;
+    const queueLength = queue.length;
+    if (!queueLength)
+      return;
+    let i = 0;
+    let j = 0;
+    let batch;
+    let batchLength;
+    for (; i < queueLength; i++) {
+      batch = queue[i];
+      j = 0;
+      batchLength = batch.length;
+      for (; j < batchLength; j++) {
+        batch[j](...args);
       }
-      _queue.length = 0;
     }
+    queue.length = 0;
   }
 };
 
@@ -167,8 +169,7 @@ var AutoTicker = class extends Ticker {
       this._request();
     if (this._empty)
       return;
-    this._fillQueue();
-    if (!this._queue.length) {
+    if (!this._fillQueue().length) {
       this._empty = true;
       return;
     }
@@ -202,143 +203,95 @@ var AutoTicker = class extends Ticker {
 };
 
 // tests/src/index.ts
-describe("ticker", () => {
-  it(`should tick automatically by default`, async () => {
-    return new Promise((resolve) => {
-      const ticker = new AutoTicker({ phases: ["test"] });
-      let counter = 0;
-      ticker.on("test", () => {
-        if (++counter === 10) {
-          ticker.paused = true;
-          ticker.off();
-          resolve();
-        }
+var VALID_FRAME_CALLBACK_IDS = [
+  null,
+  "",
+  "foo",
+  0,
+  1,
+  -1,
+  Infinity,
+  -Infinity,
+  Symbol(),
+  true,
+  false,
+  [],
+  {},
+  () => {
+  }
+];
+describe("Ticker", () => {
+  describe("constructor options", () => {
+    describe("phases", () => {
+      it(`should default to an empty array if omitted`, () => {
+        const ticker = new Ticker({});
+        assert.deepEqual(ticker.phases, []);
+      });
+      it(`should be an array of strings, numbers or symbols`, () => {
+        ["", "foo", 0, 1, -1, Infinity, -Infinity, Symbol()].forEach((phase) => {
+          const ticker = new Ticker({ phases: [phase] });
+          assert.deepEqual(ticker.phases, [phase]);
+          let counter = 0;
+          ticker.on(phase, () => {
+            ++counter;
+          });
+          ticker.once(phase, () => {
+            ++counter;
+          });
+          assert.equal(ticker.count(phase), 2);
+          ticker.tick(1);
+          assert.equal(counter, 2);
+          ticker.off(phase);
+          assert.equal(ticker.count(phase), 0);
+        });
       });
     });
-  });
-});
-describe("phase", () => {
-  it(`should be allowed to be a string, number or symbol`, () => {
-    ["", "foo", 0, 1, -1, Infinity, -Infinity, Symbol()].forEach((phase) => {
-      const ticker = new AutoTicker({ paused: true, phases: [phase] });
-      let counter = 0;
-      ticker.on(phase, () => {
-        ++counter;
+    describe("getId", () => {
+      it(`should default to creating a new Symbol if omitted`, () => {
+        const ticker = new Ticker({ phases: ["test"] });
+        const idA = ticker.on("test", () => {
+        });
+        const idB = ticker.once("test", () => {
+        });
+        assert.equal(typeof idA, "symbol");
+        assert.equal(typeof idB, "symbol");
+        assert.notEqual(idA, idB);
       });
-      ticker.once(phase, () => {
-        ++counter;
+      it(`should be a function that generates a new frame callback id`, () => {
+        let id = 0;
+        const customGetId = () => ++id;
+        const ticker = new Ticker({
+          phases: ["test"],
+          getId: customGetId
+        });
+        assert.equal(ticker.getId, customGetId);
+        const idA = ticker.on("test", () => {
+        });
+        assert.equal(idA, id);
+        const idB = ticker.once("test", () => {
+        });
+        assert.equal(idB, id);
       });
-      assert.equal(ticker.count(phase), 2);
-      ticker.tick(1);
-      assert.equal(counter, 2);
-      ticker.off(phase);
-      assert.equal(ticker.count(phase), 0);
+      it(`should receive the frame callback as it's only argument`, () => {
+        const ticker = new Ticker({
+          phases: ["test"],
+          getId: (...args) => {
+            assert.equal(args.length, 1);
+            return args[0];
+          }
+        });
+        const fcA = () => {
+        };
+        assert.equal(ticker.on("test", fcA), fcA);
+        const fcB = () => {
+        };
+        assert.equal(ticker.once("test", fcB), fcB);
+      });
     });
-  });
-});
-describe("frame callback id", () => {
-  it(`should be allowed to be any value except undefined`, () => {
-    [
-      null,
-      "",
-      "foo",
-      0,
-      1,
-      -1,
-      Infinity,
-      -Infinity,
-      Symbol(),
-      true,
-      false,
-      [],
-      {},
-      () => {
-      }
-    ].forEach((frameCallbackId) => {
-      const ticker = new AutoTicker({ paused: true, phases: ["test"] });
-      let counter = 0;
-      ticker.once(
-        "test",
-        () => {
-          ++counter;
-        },
-        frameCallbackId
-      );
-      assert.equal(ticker.count(), 1);
-      ticker.tick(1);
-      assert.equal(ticker.count(), 0);
-      assert.equal(counter, 1);
-      ticker.on(
-        "test",
-        () => {
-          ++counter;
-        },
-        frameCallbackId
-      );
-      ticker.tick(2);
-      assert.equal(ticker.count(), 1);
-      assert.equal(counter, 2);
-      ticker.off("test", frameCallbackId);
-      assert.equal(ticker.count(), 0);
-    });
-  });
-});
-describe("constructor options", () => {
-  describe("getId", () => {
-    it(`should default to creating a new Symbol if omitted`, () => {
-      const ticker = new AutoTicker({ paused: true, phases: ["test"] });
-      const idA = ticker.on("test", () => {
-      });
-      const idB = ticker.once("test", () => {
-      });
-      assert.equal(typeof idA, "symbol");
-      assert.equal(typeof idB, "symbol");
-      assert.notEqual(idA, idB);
-    });
-    it(`should be a function that generates a new frame callback id`, () => {
-      let id = 0;
-      const ticker = new AutoTicker({
-        paused: true,
-        phases: ["test"],
-        getId: () => ++id
-      });
-      const idA = ticker.on("test", () => {
-      });
-      assert.equal(idA, id);
-      const idB = ticker.once("test", () => {
-      });
-      assert.equal(idB, id);
-    });
-    it(`should receive the frame callback as it's only argument`, () => {
-      const ticker = new AutoTicker({
-        paused: true,
-        phases: ["test"],
-        getId: (...args) => {
-          assert.equal(args.length, 1);
-          return args[0];
-        }
-      });
-      const fcA = () => {
-      };
-      assert.equal(ticker.on("test", fcA), fcA);
-      const fcB = () => {
-      };
-      assert.equal(ticker.once("test", fcB), fcB);
-    });
-  });
-  describe("dedupe", () => {
-    it(`should default to "add" if omitted`, () => {
-      const ticker = new AutoTicker({ paused: true, phases: ["test"] });
-      let result = "";
-      ticker.on("test", () => void (result += "1"), "foo");
-      ticker.on("test", () => void (result += "2"));
-      ticker.on("test", () => void (result += "3"), "foo");
-      ticker.tick(1);
-      assert.equal(result, "23");
-    });
-    describe("add", () => {
-      it(`should add the duplicate frame callback to the end of the queue`, () => {
-        const ticker = new AutoTicker({ paused: true, phases: ["test"], dedupe: TickerDedupe.ADD });
+    describe("dedupe", () => {
+      it(`should default to "add" if omitted`, () => {
+        const ticker = new Ticker({ phases: ["test"] });
+        assert.equal(ticker.dedupe, TickerDedupe.ADD);
         let result = "";
         ticker.on("test", () => void (result += "1"), "foo");
         ticker.on("test", () => void (result += "2"));
@@ -346,173 +299,219 @@ describe("constructor options", () => {
         ticker.tick(1);
         assert.equal(result, "23");
       });
-    });
-    describe("update", () => {
-      it(`should update the existing frame callback with the new frame callback`, () => {
-        const ticker = new AutoTicker({
-          paused: true,
-          phases: ["test"],
-          dedupe: TickerDedupe.UPDATE
+      describe("add", () => {
+        it(`should add the duplicate frame callback to the end of the queue`, () => {
+          const ticker = new Ticker({
+            phases: ["test"],
+            dedupe: TickerDedupe.ADD
+          });
+          let result = "";
+          ticker.on("test", () => void (result += "1"), "foo");
+          ticker.on("test", () => void (result += "2"));
+          ticker.on("test", () => void (result += "3"), "foo");
+          ticker.tick(1);
+          assert.equal(result, "23");
         });
-        let result = "";
-        ticker.on("test", () => void (result += "1"), "foo");
-        ticker.on("test", () => void (result += "2"));
-        ticker.on("test", () => void (result += "3"), "foo");
+      });
+      describe("update", () => {
+        it(`should update the existing frame callback with the new frame callback`, () => {
+          const ticker = new Ticker({
+            phases: ["test"],
+            dedupe: TickerDedupe.UPDATE
+          });
+          let result = "";
+          ticker.on("test", () => void (result += "1"), "foo");
+          ticker.on("test", () => void (result += "2"));
+          ticker.on("test", () => void (result += "3"), "foo");
+          ticker.tick(1);
+          assert.equal(result, "32");
+        });
+      });
+      describe("ignore", () => {
+        it(`should ignore the duplicate frame callback`, () => {
+          const ticker = new Ticker({
+            phases: ["test"],
+            dedupe: TickerDedupe.IGNORE
+          });
+          let result = 0;
+          ticker.on("test", () => void (result = 1), "foo");
+          ticker.on("test", () => void (result = 2), "foo");
+          ticker.tick(1);
+          assert.equal(result, 1);
+        });
+      });
+      describe("throw", () => {
+        it(`should throw an error`, () => {
+          const ticker = new Ticker({
+            phases: ["test"],
+            dedupe: TickerDedupe.THROW
+          });
+          ticker.on("test", () => {
+          }, "foo");
+          assert.throws(() => ticker.on("test", () => {
+          }, "foo"));
+        });
+      });
+    });
+  });
+  describe("ticker.on()", () => {
+    describe("ticker.on(phase, frameCallback)", () => {
+      it(`should return a symbol (frame callback id) by default`, () => {
+        const ticker = new Ticker({ phases: ["test"] });
+        assert.equal(typeof ticker.on("test", () => {
+        }), "symbol");
+      });
+      it(`should add a frame callback to a phase`, () => {
+        const ticker = new Ticker({ phases: ["test"] });
+        let counter = 0;
+        ticker.on("test", () => void ++counter);
         ticker.tick(1);
-        assert.equal(result, "32");
+        assert.equal(counter, 1);
+        ticker.tick(2);
+        assert.equal(counter, 2);
       });
-    });
-    describe("ignore", () => {
-      it(`should ignore the duplicate frame callback`, () => {
-        const ticker = new AutoTicker({
-          paused: true,
-          phases: ["test"],
-          dedupe: TickerDedupe.IGNORE
-        });
-        let result = 0;
-        ticker.on("test", () => void (result = 1), "foo");
-        ticker.on("test", () => void (result = 2), "foo");
+      it("should allow duplicate frame callbacks", () => {
+        const ticker = new Ticker({ phases: ["test"] });
+        let counter = 0;
+        const fc = () => void ++counter;
+        ticker.on("test", fc);
+        ticker.on("test", fc);
         ticker.tick(1);
-        assert.equal(result, 1);
+        assert.equal(counter, 2);
       });
     });
-    describe("throw", () => {
-      it(`should throw an error`, () => {
-        const ticker = new AutoTicker({
-          paused: true,
-          phases: ["test"],
-          dedupe: TickerDedupe.THROW
+    describe("ticker.on(phase, frameCallback, frameCallbackId)", () => {
+      it(`should return the provided frame callback id`, () => {
+        const ticker = new Ticker({ phases: ["test"] });
+        assert.equal(
+          ticker.on("test", () => {
+          }, "foo"),
+          "foo"
+        );
+      });
+      it(`should allow the id to be any value except undefined`, () => {
+        VALID_FRAME_CALLBACK_IDS.forEach((frameCallbackId) => {
+          const ticker = new Ticker({ phases: ["test"] });
+          let counter = 0;
+          ticker.on(
+            "test",
+            () => {
+              ++counter;
+            },
+            frameCallbackId
+          );
+          ticker.tick();
+          assert.equal(ticker.count(), 1);
+          assert.equal(counter, 1);
+          ticker.off("test", frameCallbackId);
+          assert.equal(ticker.count(), 0);
+          ticker.tick();
+          assert.equal(counter, 1);
         });
-        ticker.on("test", () => {
-        }, "foo");
-        assert.throws(() => ticker.on("test", () => {
-        }, "foo"));
       });
     });
   });
-});
-describe("ticker.on()", () => {
-  describe("ticker.on(phase, frameCallback)", () => {
-    it(`should return a symbol (frame callback id) by default`, () => {
-      const ticker = new AutoTicker({ paused: true, phases: ["test"] });
-      assert.equal(typeof ticker.on("test", () => {
-      }), "symbol");
+  describe("ticker.once()", () => {
+    describe("ticker.once(phase, frameCallback)", () => {
+      it(`should return a symbol (frame callback id) by default`, () => {
+        const ticker = new Ticker({ phases: ["test"] });
+        assert.equal(typeof ticker.once("test", () => {
+        }), "symbol");
+      });
+      it(`should add a frame callback that triggers only once`, () => {
+        const ticker = new Ticker({ phases: ["test"] });
+        let counter = 0;
+        ticker.once("test", () => void ++counter);
+        ticker.tick(1);
+        assert.equal(counter, 1);
+        ticker.tick(2);
+        assert.equal(counter, 1);
+      });
+      it("should allow duplicate frame callbacks", () => {
+        const ticker = new Ticker({ phases: ["test"] });
+        let counter = 0;
+        const fc = () => void ++counter;
+        ticker.once("test", fc);
+        ticker.once("test", fc);
+        ticker.tick(1);
+        assert.equal(counter, 2);
+      });
     });
-    it(`should add a frame callback to a phase`, () => {
-      const ticker = new AutoTicker({ paused: true, phases: ["test"] });
-      let counter = 0;
-      ticker.on("test", () => void ++counter);
-      ticker.tick(1);
-      assert.equal(counter, 1);
-      ticker.tick(2);
-      assert.equal(counter, 2);
-    });
-    it("should allow duplicate frame callbacks", () => {
-      const ticker = new AutoTicker({ paused: true, phases: ["test"] });
-      let counter = 0;
-      const fc = () => void ++counter;
-      ticker.on("test", fc);
-      ticker.on("test", fc);
-      ticker.tick(1);
-      assert.equal(counter, 2);
-    });
-  });
-  describe("ticker.on(phase, frameCallback, frameCallbackId)", () => {
-    it(`should return the provided frame callback id`, () => {
-      const ticker = new AutoTicker({ paused: true, phases: ["test"] });
-      assert.equal(
-        ticker.on("test", () => {
-        }, "foo"),
-        "foo"
-      );
-    });
-  });
-});
-describe("ticker.once()", () => {
-  describe("ticker.once(phase, frameCallback)", () => {
-    it(`should return a symbol (frame callback id) by default`, () => {
-      const ticker = new AutoTicker({ paused: true, phases: ["test"] });
-      assert.equal(typeof ticker.once("test", () => {
-      }), "symbol");
-    });
-    it(`should add a frame callback that triggers only once`, () => {
-      const ticker = new AutoTicker({ paused: true, phases: ["test"] });
-      let counter = 0;
-      ticker.once("test", () => void ++counter);
-      ticker.tick(1);
-      assert.equal(counter, 1);
-      ticker.tick(2);
-      assert.equal(counter, 1);
-    });
-    it("should allow duplicate frame callbacks", () => {
-      const ticker = new AutoTicker({ paused: true, phases: ["test"] });
-      let counter = 0;
-      const fc = () => void ++counter;
-      ticker.once("test", fc);
-      ticker.once("test", fc);
-      ticker.tick(1);
-      assert.equal(counter, 2);
+    describe("ticker.once(phase, frameCallback, frameCallbackId)", () => {
+      it(`should return the provided frame callback id`, () => {
+        const ticker = new Ticker({ phases: ["test"] });
+        assert.equal(
+          ticker.once("test", () => {
+          }, "foo"),
+          "foo"
+        );
+      });
+      it(`should allow the id to be any value except undefined`, () => {
+        VALID_FRAME_CALLBACK_IDS.forEach((frameCallbackId) => {
+          const ticker = new Ticker({ phases: ["test"] });
+          let counter = 0;
+          ticker.once(
+            "test",
+            () => {
+              ++counter;
+            },
+            frameCallbackId
+          );
+          assert.equal(ticker.count(), 1);
+          ticker.off("test", frameCallbackId);
+          ticker.tick();
+          assert.equal(ticker.count(), 0);
+          assert.equal(counter, 0);
+        });
+      });
     });
   });
-  describe("ticker.once(phase, frameCallback, frameCallbackId)", () => {
-    it(`should return the provided frame callback id`, () => {
-      const ticker = new AutoTicker({ paused: true, phases: ["test"] });
-      assert.equal(
-        ticker.once("test", () => {
-        }, "foo"),
-        "foo"
-      );
-    });
-  });
-});
-describe("ticker.off()", () => {
   describe("ticker.off()", () => {
-    it(`should remove all frame callbacks from the ticker`, () => {
-      const ticker = new AutoTicker({ paused: true, phases: ["a", "b", "c"] });
-      ticker.on("a", () => assert.fail());
-      ticker.on("b", () => assert.fail());
-      ticker.on("c", () => assert.fail());
-      ticker.off();
-      ticker.tick(1);
-      assert.equal(1, 1);
+    describe("ticker.off()", () => {
+      it(`should remove all frame callbacks from the ticker`, () => {
+        const ticker = new Ticker({ phases: ["a", "b", "c"] });
+        ticker.on("a", () => assert.fail());
+        ticker.on("b", () => assert.fail());
+        ticker.on("c", () => assert.fail());
+        ticker.off();
+        ticker.tick(1);
+        assert.equal(1, 1);
+      });
+    });
+    describe("ticker.off(phase)", () => {
+      it(`should remove all frame callbacks of a specific phase`, () => {
+        const ticker = new Ticker({ phases: ["pass", "fail"] });
+        ticker.on("pass", () => {
+        });
+        ticker.on("fail", () => assert.fail());
+        ticker.on("fail", () => assert.fail());
+        ticker.off("fail");
+        ticker.tick(1);
+        assert.equal(1, 1);
+      });
+    });
+    describe("ticker.off(phase, frameCallbackId)", () => {
+      it(`should remove specific frame callback of a specific phase that matches the provided frame callback id`, () => {
+        const ticker = new Ticker({ phases: ["test"] });
+        let value = "";
+        ticker.on("test", () => {
+          value += "a";
+        });
+        const b = ticker.on("test", () => {
+          value += "b";
+        });
+        ticker.on("test", () => {
+          value += "c";
+        });
+        ticker.off("test", b);
+        ticker.tick(1);
+        assert.equal(value, "ac");
+      });
     });
   });
-  describe("ticker.off(phase)", () => {
-    it(`should remove all frame callbacks of a specific phase`, () => {
-      const ticker = new AutoTicker({ paused: true, phases: ["pass", "fail"] });
-      ticker.on("pass", () => {
-      });
-      ticker.on("fail", () => assert.fail());
-      ticker.on("fail", () => assert.fail());
-      ticker.off("fail");
-      ticker.tick(1);
-      assert.equal(1, 1);
-    });
-  });
-  describe("ticker.off(phase, frameCallbackId)", () => {
-    it(`should remove specific frame callback of a specific phase that matches the provided frame callback id`, () => {
-      const ticker = new AutoTicker({ paused: true, phases: ["test"] });
-      let value = "";
-      ticker.on("test", () => {
-        value += "a";
-      });
-      const b = ticker.on("test", () => {
-        value += "b";
-      });
-      ticker.on("test", () => {
-        value += "c";
-      });
-      ticker.off("test", b);
-      ticker.tick(1);
-      assert.equal(value, "ac");
-    });
-  });
-});
-describe("ticker.tick()", () => {
-  describe("ticker.tick(time)", () => {
+  describe("ticker.tick()", () => {
     it(`should emit the phases once in the defined order with correct arguments`, () => {
-      const ticker = new AutoTicker({
-        paused: true,
+      const ticker = new Ticker({
         phases: ["b", "c", "a", "a", "b"]
       });
       let result = "";
@@ -535,7 +534,7 @@ describe("ticker.tick()", () => {
       assert.equal(result, ticker.phases.join(""));
     });
     it("should allow changing ticker.phases dynamically", () => {
-      const ticker = new AutoTicker({ paused: true, phases: ["a", "b"] });
+      const ticker = new Ticker({ phases: ["a", "b"] });
       let data = "";
       ticker.on("a", () => {
         data += "a";
@@ -549,8 +548,7 @@ describe("ticker.tick()", () => {
       assert.equal(data, "abba");
     });
     it(`should throw an error if tick is called within a listener`, () => {
-      const ticker = new AutoTicker({
-        paused: true,
+      const ticker = new Ticker({
         phases: ["test"]
       });
       ticker.on("test", () => {
@@ -559,10 +557,8 @@ describe("ticker.tick()", () => {
       ticker.tick(0);
     });
     it(`should pass all the arguments to the listeners`, () => {
-      const ticker = new AutoTicker({
-        paused: true,
-        phases: ["a", "b"],
-        requestFrame: void 0
+      const ticker = new Ticker({
+        phases: ["a", "b"]
       });
       let count = 0;
       ticker.on("a", (time, deltaTime, message, ...args) => {
@@ -583,8 +579,7 @@ describe("ticker.tick()", () => {
       assert.equal(count, 2);
     });
     it(`should only emit the listeners of the active phases`, () => {
-      const ticker = new AutoTicker({
-        paused: true,
+      const ticker = new Ticker({
         phases: ["a", "b"]
       });
       let result = "";
@@ -598,44 +593,90 @@ describe("ticker.tick()", () => {
       assert.equal(result, "abcc");
     });
   });
-});
-describe("ticker.count()", () => {
-  describe("ticker.count(phase)", () => {
-    it(`should return the amount of frame callbacks for the provided phase`, () => {
-      const ticker = new AutoTicker({ paused: true, phases: ["a", "b", "c"] });
-      ticker.on("a", () => {
+  describe("ticker.count()", () => {
+    describe("ticker.count(phase)", () => {
+      it(`should return the amount of frame callbacks for the provided phase`, () => {
+        const ticker = new Ticker({ phases: ["a", "b", "c"] });
+        ticker.on("a", () => {
+        });
+        ticker.on("b", () => {
+        });
+        ticker.on("b", () => {
+        });
+        ticker.on("c", () => {
+        });
+        ticker.on("c", () => {
+        });
+        ticker.on("c", () => {
+        });
+        assert.equal(ticker.count("a"), 1);
+        assert.equal(ticker.count("b"), 2);
+        assert.equal(ticker.count("c"), 3);
       });
-      ticker.on("b", () => {
+    });
+    describe("ticker.count()", () => {
+      it(`should return the amount of all frame callbacks in the ticker`, () => {
+        const ticker = new Ticker({ phases: ["a", "b", "c"] });
+        ticker.on("a", () => {
+        });
+        ticker.on("b", () => {
+        });
+        ticker.on("b", () => {
+        });
+        ticker.on("c", () => {
+        });
+        ticker.on("c", () => {
+        });
+        ticker.on("c", () => {
+        });
+        assert.equal(ticker.count(), 6);
       });
-      ticker.on("b", () => {
-      });
-      ticker.on("c", () => {
-      });
-      ticker.on("c", () => {
-      });
-      ticker.on("c", () => {
-      });
-      assert.equal(ticker.count("a"), 1);
-      assert.equal(ticker.count("b"), 2);
-      assert.equal(ticker.count("c"), 3);
     });
   });
-  describe("ticker.count()", () => {
-    it(`should return the amount of all frame callbacks in the ticker`, () => {
-      const ticker = new AutoTicker({ paused: true, phases: ["a", "b", "c"] });
-      ticker.on("a", () => {
+});
+describe("AutoTicker", () => {
+  it(`should tick automatically by default`, async () => {
+    return new Promise((resolve) => {
+      const ticker = new AutoTicker({ phases: ["test"] });
+      let counter = 0;
+      ticker.on("test", () => {
+        if (++counter === 10) {
+          ticker.paused = true;
+          ticker.off();
+          resolve();
+        }
       });
-      ticker.on("b", () => {
+    });
+  });
+  describe("ticker.paused", () => {
+    it(`should pause/resume the ticking`, async () => {
+      return new Promise((resolve) => {
+        const ticker = new AutoTicker({ phases: ["test"] });
+        let counter = 0;
+        ticker.on("test", () => {
+          ++counter;
+          if (ticker.paused) {
+            assert.fail();
+          }
+          if (counter === 10) {
+            ticker.paused = true;
+            setTimeout(() => {
+              ticker.paused = false;
+            }, 200);
+          }
+          if (counter === 20) {
+            ticker.off();
+            resolve();
+          }
+        });
       });
-      ticker.on("b", () => {
+    });
+  });
+  describe("ticker.onDemand", () => {
+    it(`should tick only when there are active phases with frame callbacks when true`, async () => {
+      return new Promise((resolve) => {
+        resolve();
       });
-      ticker.on("c", () => {
-      });
-      ticker.on("c", () => {
-      });
-      ticker.on("c", () => {
-      });
-      assert.equal(ticker.count(), 6);
     });
   });
 });

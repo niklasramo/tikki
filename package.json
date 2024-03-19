@@ -61,12 +61,11 @@
     "format-check": "prettier --check --no-error-on-unmatched-pattern \"./**/*\""
   },
   "devDependencies": {
-    "@size-limit/preset-small-lib": "11.1.0",
-    "@types/chai": "4.3.12",
+    "@size-limit/preset-small-lib": "11.1.1",
+    "@types/chai": "4.3.13",
     "@types/mocha": "10.0.6",
     "@types/webxr": "0.5.14",
     "chai": "5.1.0",
-    "del-cli": "5.1.0",
     "dotenv": "16.4.5",
     "eventti": "4.0.0",
     "gzip-size-cli": "5.1.0",
@@ -76,6 +75,7 @@
     "karma-mocha-reporter": "2.2.5",
     "mocha": "10.3.0",
     "prettier": "3.2.5",
+    "rimraf": "5.0.5",
     "terser": "5.29.2",
     "tsup": "8.0.2",
     "typescript": "5.4.2"

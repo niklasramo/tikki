@@ -69,20 +69,9 @@ declare class AutoTicker<P extends Phase, FC extends FrameCallback = AutoTickerD
     protected _cancel(): void;
 }
 
-declare class Clock {
-    readonly ticks: number;
-    readonly startTime: number;
-    readonly time: number;
-    readonly deltaTime: number;
-    readonly elapsedTime: number;
-    timescale: number;
-    constructor();
-    tick(time: number, dt?: number): void;
-}
-
 declare function createRequestFrame(fallbackFPS?: number): (callback: FrameRequestCallback) => () => void;
 
 type XrFrameCallback = XRFrameRequestCallback;
 declare function createXrRequestFrame(xrSession: XRSession): (callback: XrFrameCallback) => () => void;
 
-export { AutoTicker, type AutoTickerDefaultFrameCallback, type AutoTickerOptions, type CancelFrame, Clock, type FrameCallback, type FrameCallbackId, type Phase, type RequestFrame, Ticker, TickerDedupe, type TickerOptions, type XrFrameCallback, createRequestFrame, createXrRequestFrame };
+export { AutoTicker, type AutoTickerDefaultFrameCallback, type AutoTickerOptions, type CancelFrame, type FrameCallback, type FrameCallbackId, type Phase, type RequestFrame, Ticker, TickerDedupe, type TickerOptions, type XrFrameCallback, createRequestFrame, createXrRequestFrame };
