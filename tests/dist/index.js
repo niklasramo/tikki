@@ -143,7 +143,7 @@ var AutoTicker = class extends Ticker {
     paused ? this._cancel() : this._request();
   }
   get onDemand() {
-    return this._paused;
+    return this._onDemand;
   }
   set onDemand(onDemand) {
     this._onDemand = onDemand;
@@ -221,16 +221,17 @@ var VALID_FRAME_CALLBACK_IDS = [
   }
 ];
 describe("Ticker", () => {
-  describe("constructor options", () => {
+  describe("options", () => {
     describe("phases", () => {
       it(`should default to an empty array if omitted`, () => {
-        const ticker = new Ticker({});
+        const ticker = new Ticker();
         assert.deepEqual(ticker.phases, []);
       });
-      it(`should be an array of strings, numbers or symbols`, () => {
-        ["", "foo", 0, 1, -1, Infinity, -Infinity, Symbol()].forEach((phase) => {
-          const ticker = new Ticker({ phases: [phase] });
-          assert.deepEqual(ticker.phases, [phase]);
+      it(`should accept an array of strings, numbers and/or symbols and propagate the value to ticker.phases`, () => {
+        const phases = ["", "foo", 0, 1, -1, Infinity, -Infinity, NaN, Symbol()];
+        const ticker = new Ticker({ phases });
+        assert.deepEqual(ticker.phases, phases);
+        phases.forEach((phase) => {
           let counter = 0;
           ticker.on(phase, () => {
             ++counter;
@@ -238,10 +239,13 @@ describe("Ticker", () => {
           ticker.once(phase, () => {
             ++counter;
           });
+          assert.equal(counter, 0);
           assert.equal(ticker.count(phase), 2);
-          ticker.tick(1);
+          ticker.tick();
           assert.equal(counter, 2);
+          assert.equal(ticker.count(phase), 1);
           ticker.off(phase);
+          assert.equal(counter, 2);
           assert.equal(ticker.count(phase), 0);
         });
       });
@@ -257,7 +261,7 @@ describe("Ticker", () => {
         assert.equal(typeof idB, "symbol");
         assert.notEqual(idA, idB);
       });
-      it(`should be a function that generates a new frame callback id`, () => {
+      it(`should accept a function that generates a new frame callback id`, () => {
         let id = 0;
         const customGetId = () => ++id;
         const ticker = new Ticker({
@@ -298,6 +302,16 @@ describe("Ticker", () => {
         ticker.on("test", () => void (result += "3"), "foo");
         ticker.tick(1);
         assert.equal(result, "23");
+      });
+      it("should accept a TickerDedupe value and propagate the value to ticker.dedupe", () => {
+        const tickerAdd = new Ticker({ dedupe: TickerDedupe.ADD });
+        assert.equal(tickerAdd.dedupe, TickerDedupe.ADD);
+        const tickerUpdate = new Ticker({ dedupe: TickerDedupe.UPDATE });
+        assert.equal(tickerUpdate.dedupe, TickerDedupe.UPDATE);
+        const tickerIgnore = new Ticker({ dedupe: TickerDedupe.IGNORE });
+        assert.equal(tickerIgnore.dedupe, TickerDedupe.IGNORE);
+        const tickerThrow = new Ticker({ dedupe: TickerDedupe.THROW });
+        assert.equal(tickerThrow.dedupe, TickerDedupe.THROW);
       });
       describe("add", () => {
         it(`should add the duplicate frame callback to the end of the queue`, () => {
@@ -648,6 +662,43 @@ describe("AutoTicker", () => {
       });
     });
   });
+  describe("options", () => {
+    describe("defaults", () => {
+      const ticker = new AutoTicker();
+      assert.deepEqual(ticker.phases, []);
+      assert.equal(ticker.dedupe, TickerDedupe.ADD);
+      assert.equal(typeof ticker.getId(() => {
+      }), "symbol");
+      assert.equal(ticker.paused, false);
+      assert.equal(ticker.onDemand, false);
+    });
+    describe("paused", () => {
+      it(`should accept boolean and propagate value to ticker.paused`, () => {
+        const tickerA = new AutoTicker({ paused: true });
+        const tickerB = new AutoTicker({ paused: false });
+        assert.equal(tickerA.paused, true);
+        assert.equal(tickerB.paused, false);
+      });
+    });
+    describe("onDemand", () => {
+      it(`should accept boolean and propagate value to ticker.onDemand`, () => {
+        const tickerA = new AutoTicker({ onDemand: true });
+        const tickerB = new AutoTicker({ onDemand: false });
+        assert.equal(tickerA.onDemand, true);
+        assert.equal(tickerB.onDemand, false);
+      });
+    });
+    describe("requestFrame", () => {
+      it(`should accept a frame request function and propagate value to ticker.requestFrame`, () => {
+        const requestFrame = (callback) => {
+          const id = setTimeout(() => callback(), 1e3);
+          return () => clearTimeout(id);
+        };
+        const ticker = new AutoTicker({ requestFrame });
+        assert.equal(ticker.requestFrame, requestFrame);
+      });
+    });
+  });
   describe("ticker.paused", () => {
     it(`should pause/resume the ticking`, async () => {
       return new Promise((resolve) => {
@@ -672,10 +723,59 @@ describe("AutoTicker", () => {
       });
     });
   });
+  describe("ticker.requestFrame", () => {
+    it(`should call the next frame and return a function to cancel the requested frame`, async () => {
+      return new Promise((resolve) => {
+        let reqCount = 0;
+        let cancelCount = 0;
+        const requestFrame = (callback) => {
+          const id = setTimeout(() => {
+            ++reqCount;
+            callback();
+          }, 100);
+          return () => {
+            ++cancelCount;
+            clearTimeout(id);
+          };
+        };
+        const ticker = new AutoTicker({ phases: ["test"], requestFrame });
+        ticker.on("test", () => {
+          assert.equal(reqCount, 1);
+          ticker.paused = true;
+          assert.equal(cancelCount, 1);
+          ticker.off();
+          resolve();
+        });
+      });
+    });
+  });
   describe("ticker.onDemand", () => {
     it(`should tick only when there are active phases with frame callbacks when true`, async () => {
       return new Promise((resolve) => {
-        resolve();
+        let reqCount = 0;
+        let cancelCount = 0;
+        const requestFrame = (callback) => {
+          ++reqCount;
+          const id = setTimeout(() => {
+            callback();
+          }, 1e3 / 60);
+          return () => {
+            ++cancelCount;
+            clearTimeout(id);
+          };
+        };
+        const ticker = new AutoTicker({ phases: ["test"], requestFrame, onDemand: true });
+        setTimeout(() => {
+          assert.equal(reqCount, 0);
+          assert.equal(cancelCount, 0);
+          ticker.once("test", () => {
+            setTimeout(() => {
+              assert.equal(reqCount, 2);
+              assert.equal(cancelCount, 0);
+              resolve();
+            }, 100);
+          });
+        }, 100);
       });
     });
   });
