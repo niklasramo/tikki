@@ -29,7 +29,7 @@ const ticker = new Ticker();
   {
     "imports": {
       "eventti": "https://cdn.jsdelivr.net/npm/eventti@4.0.0/dist/index.js",
-      "tikki": "https://cdn.jsdelivr.net/npm/tikki@3.0.0/dist/index.js"
+      "tikki": "https://cdn.jsdelivr.net/npm/tikki@3.0.1/dist/index.js"
     }
   }
 </script>

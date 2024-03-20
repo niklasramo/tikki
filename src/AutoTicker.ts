@@ -73,7 +73,7 @@ export class AutoTicker<
   }
 
   get onDemand() {
-    return this._paused;
+    return this._onDemand;
   }
 
   set onDemand(onDemand: boolean) {

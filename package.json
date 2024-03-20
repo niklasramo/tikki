@@ -1,6 +1,6 @@
 {
   "name": "tikki",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Minimalistic game/animation loop orchestrator",
   "keywords": [
     "event",
@@ -51,7 +51,7 @@
   "scripts": {
     "test": "npm run ts-check && npm run test-node && npm run test-browser",
     "test-browser": "karma start karma.conf.cjs",
-    "test-node": "mocha tests/dist/index.js",
+    "test-node": "mocha --exit tests/dist/index.js",
     "test-size": "size-limit",
     "build": "npm run ts-check && npm run format && npm run build-lib && npm run build-tests",
     "build-lib": "rimraf ./dist && tsup --config ./tsup.config.lib.ts",
