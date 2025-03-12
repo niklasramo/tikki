@@ -1,6 +1,6 @@
 {
   "name": "tikki",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "description": "Minimalistic game/animation loop orchestrator",
   "keywords": [
     "event",
@@ -61,24 +61,24 @@
     "format-check": "prettier --check --no-error-on-unmatched-pattern \"./**/*\""
   },
   "devDependencies": {
-    "@size-limit/preset-small-lib": "11.1.1",
-    "@types/chai": "4.3.13",
-    "@types/mocha": "10.0.6",
-    "@types/webxr": "0.5.14",
-    "chai": "5.1.0",
-    "dotenv": "16.4.5",
-    "eventti": "4.0.0",
+    "@size-limit/preset-small-lib": "11.2.0",
+    "@types/chai": "5.2.0",
+    "@types/mocha": "10.0.10",
+    "@types/webxr": "0.5.21",
+    "chai": "5.2.0",
+    "dotenv": "16.4.7",
+    "eventti": "4.0.3",
     "gzip-size-cli": "5.1.0",
-    "karma": "6.4.3",
+    "karma": "6.4.4",
     "karma-browserstack-launcher": "1.6.0",
     "karma-mocha": "2.0.1",
     "karma-mocha-reporter": "2.2.5",
-    "mocha": "10.3.0",
-    "prettier": "3.2.5",
-    "rimraf": "5.0.5",
-    "terser": "5.29.2",
-    "tsup": "8.0.2",
-    "typescript": "5.4.2"
+    "mocha": "11.1.0",
+    "prettier": "3.5.3",
+    "rimraf": "6.0.1",
+    "terser": "5.39.0",
+    "tsup": "8.4.0",
+    "typescript": "5.8.2"
   },
   "peerDependencies": {
     "eventti": "^4.0.0"

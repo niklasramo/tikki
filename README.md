@@ -28,8 +28,8 @@ const ticker = new Ticker();
 <script type="importmap">
   {
     "imports": {
-      "eventti": "https://cdn.jsdelivr.net/npm/eventti@4.0.0/dist/index.js",
-      "tikki": "https://cdn.jsdelivr.net/npm/tikki@3.0.1/dist/index.js"
+      "eventti": "https://cdn.jsdelivr.net/npm/eventti@4.0.3/dist/index.js",
+      "tikki": "https://cdn.jsdelivr.net/npm/tikki@3.0.2/dist/index.js"
     }
   }
 </script>
@@ -533,4 +533,4 @@ type CancelFrame = () => void;
 
 ## License
 
-Copyright © 2022-2024, Niklas Rämö (inramo@gmail.com). Licensed under the MIT license.
+Copyright © 2022-2025, Niklas Rämö (inramo@gmail.com). Licensed under the MIT license.
